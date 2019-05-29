@@ -1,0 +1,32 @@
+{
+  "name": "ascertain",
+  "version": "0.1.0",
+  "description": "Simple, fast, for browser and node js  object schema validator",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "babel src --out-dir build --ignore **/__tests__,**/__fixtures__",
+    "test": "NODE_ENV=test jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3axap4eHko/ascertain.git"
+  },
+  "keywords": [
+    "schema",
+    "validator",
+    "ascertain"
+  ],
+  "author": "Ivan Zakharchanka",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/3axap4eHko/ascertain/issues"
+  },
+  "homepage": "https://github.com/3axap4eHko/ascertain#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.4.4",
+    "@babel/core": "^7.4.5",
+    "@babel/preset-env": "^7.4.5",
+    "babel-jest": "^24.8.0",
+    "jest": "^24.8.0"
+  }
+}
