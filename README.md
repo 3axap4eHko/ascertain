@@ -58,4 +58,4 @@ Copyright (c) 2019 Ivan Zakharchenko
 [npm-url]: https://www.npmjs.com/package/ascertain
 [npm-image]: https://img.shields.io/npm/v/ascertain.svg
 [travis-url]: https://travis-ci.org/3axap4eHko/ascertain
-[travis-image]: https://img.shields.io/travis/3axap4eHko/ascertain/master.svg
+[travis-image]: https://travis-ci.org/3axap4eHko/ascertain.svg?branch=master
