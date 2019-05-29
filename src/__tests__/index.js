@@ -1,7 +1,8 @@
 import ascertain from '../index';
 
 const fixture = {
-  a: 1, b: 'test', c: true, d: [1, 2, 3, 4, 5], e: { f: 1 }, f() {}
+  a: 1, b: 'test', c: true, d: [1, 2, 3, 4, 5], e: { f: 1 }, f() {
+  }, g: null,
 };
 
 describe('Ascertain test suite', () => {
@@ -16,9 +17,11 @@ describe('Ascertain test suite', () => {
     ['Object properties', { e: { f: Number } }],
     ['RegExp', { b: /^test$/ }],
     ['Set', { c: new Set([true, false]) }],
+    ['Value', { c: true }],
   ])('Should validate schema type %s positive', (title, schema) => {
     const isValid = ascertain(schema);
     expect(() => isValid(fixture)).not.toThrow();
+    expect(() => ascertain(schema, fixture)).not.toThrow();
   });
 
   it.each([
@@ -32,9 +35,13 @@ describe('Ascertain test suite', () => {
     ['Object properties', { e: { d: Number } }],
     ['RegExp', { b: /^testing$/ }],
     ['Set', { c: new Set([]) }],
+    ['Value', { c: false }],
+    ['Null', { a: null }],
+    ['Null', { g: null }],
   ])('Should validate schema type %s negative', (title, schema) => {
     const isValid = ascertain(schema);
     expect(() => isValid(fixture)).toThrow();
+    expect(() => ascertain(schema, fixture)).toThrow();
   });
 
 });

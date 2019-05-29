@@ -54,8 +54,10 @@ export default ascertain({
 License [The MIT License](http://opensource.org/licenses/MIT)
 Copyright (c) 2019 Ivan Zakharchenko
 
-[downloads-image]: https://img.shields.io/npm/dm/ascertain.svg
 [npm-url]: https://www.npmjs.com/package/ascertain
-[npm-image]: https://img.shields.io/npm/v/ascertain.svg
+[downloads-image]: https://img.shields.io/npm/dm/ascertain.svg?maxAge=43200
+[npm-image]: https://img.shields.io/npm/v/ascertain.svg?maxAge=43200
 [travis-url]: https://travis-ci.org/3axap4eHko/ascertain
 [travis-image]: https://travis-ci.org/3axap4eHko/ascertain.svg?branch=master
+[codecov-url]: 
+[codecov-image]: https://img.shields.io/codecov/c/github/babel/babel/master.svg?maxAge=43200 

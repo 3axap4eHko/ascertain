@@ -10,5 +10,6 @@ notifications:
 before_install:
   - nvm install 8
 install:
+  - yarn global add codecov
   - yarn
 script: yarn test
