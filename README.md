@@ -53,7 +53,7 @@ export default ascertain({
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2019 Ivan Zakharchenko
+Copyright (c) 2019 Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200
