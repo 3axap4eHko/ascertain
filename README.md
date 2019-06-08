@@ -6,6 +6,7 @@ Simple, fast, for browser and node js object schema validator
 [![Build Status][travis-image]][travis-url]
 [![NPM version][npm-image]][npm-url]
 [![Downloads][downloads-image]][npm-url]
+[![Snyk][snyk-image]][snyk-url]
 
 ## Usage Example
 
@@ -62,3 +63,5 @@ Copyright (c) 2019 Ivan Zakharchanka
 [travis-image]: https://travis-ci.org/3axap4eHko/ascertain.svg?branch=master
 [codecov-url]: https://codecov.io/gh/3axap4eHko/ascertain
 [codecov-image]: https://img.shields.io/codecov/c/github/3axap4eHko/ascertain/master.svg?maxAge=43200 
+[snyk-url]: https://snyk.io/test/npm/ascertain/latest
+[snyk-image]: https://snyk.io/test/npm/ascertain/latest/badge.svg
