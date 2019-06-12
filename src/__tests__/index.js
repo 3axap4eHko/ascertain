@@ -6,6 +6,18 @@ const fixture = {
 };
 
 describe('Ascertain test suite', () => {
+  it('Should throw an error for null or undefined schema', () => {
+    const isValid = ascertain(null);
+    expect(() => isValid(fixture)).toThrow('Invalid schema null');
+    expect(() => ascertain(null, fixture)).toThrow('Invalid schema null');
+  });
+
+  it('Should throw an error for null or undefined target', () => {
+    const isValid = ascertain({});
+    expect(() => isValid(null)).toThrow('Invalid value by path [root]');
+    expect(() => ascertain({}, null)).toThrow('Invalid value by path [root]');
+  });
+
   it.each([
     ['Number', { a: Number }],
     ['String', { b: String }],

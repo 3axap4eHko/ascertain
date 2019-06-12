@@ -9,6 +9,12 @@ function findFirst(array, map) {
 }
 
 function ascertain(target, schema, path) {
+  if (schema === null || typeof schema === 'undefined') {
+    return new Error(`Invalid schema ${JSON.stringify(schema)}`);
+  }
+  if (target === null || typeof target === 'undefined') {
+    return new Error(`Invalid value by path ${path} expected not null and not undefined`);
+  }
   if (typeof schema === 'function') {
     if (target.constructor !== schema) {
       return new Error(`Invalid type by path ${path} expected ${schema.name}`);
@@ -22,9 +28,7 @@ function ascertain(target, schema, path) {
         && new Error(`Invalid type by path ${path}.${idx} expected one of ${schema.map(({ name }) => name)}`);
     });
   } else if (typeof schema === 'object') {
-    if (target === null) {
-      return new Error(`Invalid value by path ${path} expected not null`);
-    } else if (schema instanceof RegExp) {
+    if (schema instanceof RegExp) {
       if (!schema.test(target.toString())) {
         return new Error(`Invalid value by path ${path} expected matching /${schema.source}/`);
       }
