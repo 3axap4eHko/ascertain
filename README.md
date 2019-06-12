@@ -12,7 +12,7 @@ Simple, fast, for browser and node js object schema validator
 
 Immediate data ascertain
 ```js
-import ascertain from 'ascertain';
+import ascertain, { optional } from 'ascertain';
 
 ascertain({
   number: Number,
@@ -27,13 +27,16 @@ ascertain({
   arrayOfNumbers: [Number],
   objectSchema: {
     number: Number,
-  }
+  },
+  optional: optional({
+    number: Number,
+  }),
 }, data);
 ```
 
 Prepared data ascertain
 ```js
-import ascertain from 'ascertain';
+import ascertain, { optional } from 'ascertain';
 
 export default ascertain({
   number: Number,
@@ -48,7 +51,10 @@ export default ascertain({
   arrayOfNumbers: [Number],
   objectSchema: {
     number: Number,
-  }
+  },
+  optional: optional({
+    number: Number,
+  }),
 });
 ```
 
