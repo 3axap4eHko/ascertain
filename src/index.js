@@ -8,12 +8,22 @@ function findFirst(array, map) {
   return false;
 }
 
-function ascertain(target, schema, path) {
+function Optional(schema) {
+  this.schema = schema;
+}
+
+function ascertain(target, schema, path, optional) {
   if (schema === null || typeof schema === 'undefined') {
     return new Error(`Invalid schema ${JSON.stringify(schema)}`);
   }
+  if (schema instanceof Optional) {
+    return ascertain(target, schema.schema, path, true);
+  }
   if (target === null || typeof target === 'undefined') {
-    return new Error(`Invalid value by path ${path} expected not null and not undefined`);
+    if (!optional) {
+      return new Error(`Invalid value by path ${path} expected not null and not undefined`);
+    }
+    return void 0;
   }
   if (typeof schema === 'function') {
     if (target.constructor !== schema) {
@@ -52,6 +62,10 @@ function handleResult(result) {
     throw result;
   }
 }
+
+export const optional = schema => {
+  return new Optional(schema);
+};
 
 export default (schema, data) => {
   if (typeof data !== 'undefined') {
