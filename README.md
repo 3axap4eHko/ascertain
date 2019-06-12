@@ -70,4 +70,4 @@ Copyright (c) 2019 Ivan Zakharchanka
 [codecov-url]: https://codecov.io/gh/3axap4eHko/ascertain
 [codecov-image]: https://img.shields.io/codecov/c/github/3axap4eHko/ascertain/master.svg?maxAge=43200 
 [snyk-url]: https://snyk.io/test/npm/ascertain/latest
-[snyk-image]: https://snyk.io/test/npm/ascertain/latest/badge.svg
+[snyk-image]: https://img.shields.io/snyk/vulnerabilities/github/3axap4eHko/ascertain.svg?maxAge=43200
