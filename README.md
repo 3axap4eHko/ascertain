@@ -14,7 +14,7 @@
 
 Create data ascertain
 ```js
-import ascertain, { optional, $keys, $values } from 'ascertain';
+import ascertain, { optional, and, or, $keys, $values } from 'ascertain';
 
 export default ascertain({
   number: Number,
@@ -23,9 +23,9 @@ export default ascertain({
   function: Function,
   array: Array,
   object: Object,
-  date: Date,
+  date: and(Date, { toJSON: Function }),
   regexp: /regexp/,
-  oneOfValue: new Set([1, 2, 3]),
+  oneOfValue: or(1, 2, 3),
   arrayOfNumbers: [Number],
   objectSchema: {
     number: Number,
