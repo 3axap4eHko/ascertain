@@ -1,6 +1,8 @@
 # Ascertain
 
-Simple, fast, for browser and node js object schema validator
+### Ascertain what data is not suitable for your library
+
+0-Deps, simple, fast, for browser and node js object schema validator
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][travis-image]][travis-url]
@@ -10,33 +12,9 @@ Simple, fast, for browser and node js object schema validator
 
 ## Usage Example
 
-Immediate data ascertain
+Create data ascertain
 ```js
-import ascertain, { optional } from 'ascertain';
-
-ascertain({
-  number: Number,
-  string: String,
-  boolean: Boolean,
-  function: Function,
-  array: Array,
-  object: Object,
-  date: Date,
-  regexp: /regexp/,
-  oneOfValue: new Set([1, 2, 3]),
-  arrayOfNumbers: [Number],
-  objectSchema: {
-    number: Number,
-  },
-  optional: optional({
-    number: Number,
-  }),
-}, data);
-```
-
-Prepared data ascertain
-```js
-import ascertain, { optional } from 'ascertain';
+import ascertain, { optional, $keys, $values } from 'ascertain';
 
 export default ascertain({
   number: Number,
@@ -55,8 +33,39 @@ export default ascertain({
   optional: optional({
     number: Number,
   }),
+  keyValue: {
+    [$keys]: /^key[A-Z]/,
+    [$values]: Number
+  },
 });
 ```
+
+Validate your data
+```js
+import validate from './validate.js'
+
+validate({
+  number: 1,
+  string: 'string',
+  boolean: true,
+  function: () => {},
+  array: [],
+  object: {},
+  date: new Date,
+  regexp: 'regexp',
+  oneOfValue: 1,
+  arrayOfNumbers: [1,2,3,4,5],
+  objectSchema: {
+    number: 1,
+  },
+  optional: null,
+  keyValue: {
+    keyOne: 1,
+    keyTwo: 2,
+    keyThree: 3,
+  },
+});
+````
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)
