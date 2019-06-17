@@ -4,7 +4,7 @@
   "description": "Simple, fast, for browser and node js  object schema validator",
   "main": "build/index.js",
   "scripts": {
-    "build": "babel src --out-dir build --ignore **/__tests__,**/__fixtures__",
+    "build": "NODE_ENV=production babel src --out-dir build --ignore **/__tests__,**/__fixtures__",
     "test": "NODE_ENV=test jest"
   },
   "repository": {
@@ -13,8 +13,12 @@
   },
   "keywords": [
     "schema",
+    "validation",
     "validator",
-    "ascertain"
+    "assert",
+    "ascertain",
+    "browser",
+    "node"
   ],
   "author": "Ivan Zakharchanka",
   "license": "MIT",

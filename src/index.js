@@ -63,7 +63,6 @@ export const or = (...schema) => {
 export const $keys = Symbol.for('@@keys');
 export const $values = Symbol.for('@@values');
 
-
 function ascertain(target, schema, path, optional) {
   if (schema === null || typeof schema === 'undefined') {
     return new AssertError(schema, 'any value', path, 'schema value');
