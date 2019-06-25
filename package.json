@@ -1,7 +1,7 @@
 {
   "name": "ascertain",
   "version": "0.5.1",
-  "description": "Simple, fast, for browser and node js  object schema validator",
+  "description": "0-Deps, simple, fast, for browser and node js object schema validator",
   "main": "build/index.js",
   "scripts": {
     "build": "NODE_ENV=production babel src --out-dir build --ignore **/__tests__,**/__fixtures__",
@@ -12,9 +12,13 @@
     "url": "git+https://github.com/3axap4eHko/ascertain.git"
   },
   "keywords": [
+    "javascript",
+    "js",
     "schema",
     "validation",
+    "js-validation",
     "validator",
+    "js-validator",
     "assert",
     "ascertain",
     "browser",

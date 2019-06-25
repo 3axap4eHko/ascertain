@@ -10,6 +10,16 @@
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
 
+## Features
+
+ - value validation
+ - class validation
+ - structure validation
+ - regexp validation
+ - and/or validation
+ - object keys validation
+ - object values validation
+
 ## Usage Example
 
 Create data ascertain
