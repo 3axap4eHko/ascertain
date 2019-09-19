@@ -70,6 +70,12 @@ function ascertain(target, schema, path, optional) {
   if (schema instanceof Optional) {
     return ascertain(target, schema.schema, path, true);
   }
+  if (target === null || typeof target === 'undefined') {
+    if (!optional) {
+      return new AssertError(target, 'any value', path);
+    }
+    return;
+  }
   if (schema instanceof Or) {
     if (!schema.schema.length) {
       return new AssertError(target, 'values', path, 'OR schema');
@@ -82,11 +88,8 @@ function ascertain(target, schema, path, optional) {
     }
     return findFirstError(schema.schema, schema => ascertain(target, schema, path));
   }
-  if (target === null || typeof target === 'undefined') {
-    if (!optional) {
-      return new AssertError(target, 'any value', path);
-    }
-  } else if (typeof schema === 'function') {
+
+  if (typeof schema === 'function') {
     if (typeof target === 'object' && !(target instanceof schema)) {
       return new AssertError(target, schema.name, path);
     }
@@ -130,9 +133,9 @@ function ascertain(target, schema, path, optional) {
   }
 }
 
-export default (schema) => {
+export default (schema, rootName = '[root]') => {
   return data => {
-    const result = ascertain(data, schema, '[root]');
+    const result = ascertain(data, schema, rootName);
     if (result instanceof AssertError) {
       throw new TypeError(result.toString());
     }

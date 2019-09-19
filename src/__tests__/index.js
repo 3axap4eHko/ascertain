@@ -30,6 +30,7 @@ describe('Ascertain test suite', () => {
     ['Value', { c: true }, fixture],
     ['Optional exists', { c: optional(true) }, fixture],
     ['Optional does not exist', { z: optional(true) }, fixture],
+    ['Optional complex does not exist', { z: optional(or(true, false)) }, fixture],
     ['And', { h: and(Date, { toJSON: Function }) }, fixture],
     ['Or', { c: or(true, false) }, fixture],
     ['Keys', { e: { [$keys]: /^\w+$/ } }, fixture],
