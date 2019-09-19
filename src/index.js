@@ -70,10 +70,8 @@ function ascertain(target, schema, path, optional) {
   if (schema instanceof Optional) {
     return ascertain(target, schema.schema, path, true);
   }
-  if (target === null || typeof target === 'undefined') {
-    if (!optional) {
-      return new AssertError(target, 'any value', path);
-    }
+  const isValue = target !== null && typeof target !== 'undefined';
+  if (!isValue && optional) {
     return;
   }
   if (schema instanceof Or) {
@@ -90,10 +88,13 @@ function ascertain(target, schema, path, optional) {
   }
 
   if (typeof schema === 'function') {
+    if (!isValue) {
+      return new AssertError(target, schema.name, path);
+    }
     if (typeof target === 'object' && !(target instanceof schema)) {
       return new AssertError(target, schema.name, path);
     }
-    if (typeof target !== 'object' && target.constructor !== schema) {
+    if (typeof target !== 'object' && (target.constructor !== schema)) {
       return new AssertError(target, schema.name, path);
     }
   } else if (Array.isArray(schema)) {
@@ -105,12 +106,15 @@ function ascertain(target, schema, path, optional) {
     });
   } else if (typeof schema === 'object') {
     if (schema instanceof RegExp) {
-      if (!schema.test(target.toString())) {
+      if (!schema.test('' + target)) {
         return new AssertError(target, `matching /${schema.source}/`, path);
       }
     } else {
       if (typeof target !== 'object') {
         return new AssertError(target, schema.constructor.name, path);
+      }
+      if (target === null) {
+        return new AssertError(target, 'an object', path);
       }
       if ($keys in schema) {
         const targetKeys = Object.keys(target);

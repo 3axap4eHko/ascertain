@@ -14,7 +14,7 @@ describe('Ascertain test suite', () => {
 
   it('Should throw an error for null or undefined target', () => {
     const isValid = ascertain({});
-    expect(() => isValid(null)).toThrow('Invalid value null specified by path [root]');
+    expect(() => isValid(null)).toThrow('Invalid value null specified by path [root] expected an object');
   });
 
   it.each([
@@ -48,8 +48,9 @@ describe('Ascertain test suite', () => {
     ['Array', { e: Array }, fixture, 'expected Array'],
     ['Array items', { d: [String] }, fixture, 'expected String'],
     ['Object', { c: Object }, fixture, 'expected Object'],
-    ['Object properties', { e: { d: Number } }, fixture, 'any value'],
+    ['Object properties', { e: { d: Number } }, fixture, 'Number'],
     ['RegExp', { b: /^testing$/ }, fixture, 'matching /^testing$/'],
+    ['RegExp undefined', { z: /^testing$/ }, fixture, 'matching /^testing$/'],
     ['Value', { c: false }, fixture, 'expected false'],
     ['Null', { a: null }, fixture, 'Invalid schema value null'],
     ['Null', { g: null }, fixture, 'Invalid schema value null'],
