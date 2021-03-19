@@ -5,7 +5,7 @@
 0-Deps, simple, fast, for browser and node js object schema validator
 
 [![Coverage Status][codecov-image]][codecov-url]
-[![Build Status][travis-image]][travis-url]
+[![Build Status][github-image]][github-url]
 [![NPM version][npm-image]][npm-url]
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
@@ -79,14 +79,14 @@ validate({
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2019 Ivan Zakharchanka
+Copyright (c) 2021 Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200
 [npm-image]: https://img.shields.io/npm/v/ascertain.svg?maxAge=43200
-[travis-url]: https://travis-ci.org/3axap4eHko/ascertain
-[travis-image]: https://travis-ci.org/3axap4eHko/ascertain.svg?branch=master
+[github-url]: https://github.com/3axap4eHko/ascertain/actions/workflows/cicd.yml
+[github-image]: https://github.com/3axap4eHko/ascertain/actions/workflows/cicd.yml/badge.svg
 [codecov-url]: https://codecov.io/gh/3axap4eHko/ascertain
-[codecov-image]: https://img.shields.io/codecov/c/github/3axap4eHko/ascertain/master.svg?maxAge=43200 
+[codecov-image]: https://img.shields.io/codecov/c/github/3axap4eHko/ascertain/master.svg?maxAge=43200
 [snyk-url]: https://snyk.io/test/npm/ascertain/latest
 [snyk-image]: https://img.shields.io/snyk/vulnerabilities/github/3axap4eHko/ascertain.svg?maxAge=43200
