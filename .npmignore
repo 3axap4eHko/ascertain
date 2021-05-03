@@ -1,4 +1,7 @@
 /.idea
+/.github
 /coverage
 /src
 /*.log*
+/*.js
+/.babelrc
