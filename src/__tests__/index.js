@@ -8,13 +8,11 @@ const fixture = {
 
 describe('Ascertain test suite', () => {
   it('Should throw an error for null or undefined schema', () => {
-    const isValid = ascertain(null);
-    expect(() => isValid(fixture)).toThrow('Invalid schema value null');
+    expect(() => ascertain(null, fixture)).toThrow('Invalid schema value null');
   });
 
   it('Should throw an error for null or undefined target', () => {
-    const isValid = ascertain({});
-    expect(() => isValid(null)).toThrow('Invalid value null specified by path [root] expected an object');
+    expect(() => ascertain({}, null)).toThrow('Invalid value null specified by path [root] expected an object');
   });
 
   it.each([
@@ -36,8 +34,7 @@ describe('Ascertain test suite', () => {
     ['Keys', { e: { [$keys]: /^\w+$/ } }, fixture],
     ['Values', { e: { [$values]: Number } }, fixture],
   ])('Should validate schema type %s positive', (title, schema, target) => {
-    const isValid = ascertain(schema);
-    expect(() => isValid(target)).not.toThrow();
+    expect(() => ascertain(schema, target)).not.toThrow();
   });
 
   it.each([
@@ -65,12 +62,11 @@ describe('Ascertain test suite', () => {
     ['Array schema', [], {}, 'expected Array'],
     ['Non object target', {}, 2, 'expected Object'],
   ])('Should validate schema type %s negative', (title, schema, target, message) => {
-    const isValid = ascertain(schema);
-    expect(() => isValid(target)).toThrow(message);
+    expect(() => ascertain(schema, target)).toThrow(message);
   });
 
   it('Should validate README example', () => {
-    const isValid = ascertain({
+    const isValid = data => ascertain({
       number: Number,
       string: String,
       boolean: Boolean,
@@ -91,7 +87,7 @@ describe('Ascertain test suite', () => {
         [$keys]: /^key[A-Z]/,
         [$values]: Number,
       },
-    });
+    }, data);
 
     expect(() => {
       isValid({

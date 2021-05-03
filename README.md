@@ -2,7 +2,7 @@
 
 ### Ascertain what data is not suitable for your library
 
-0-Deps, simple, fast, for browser and node js object schema validator
+0-Deps, simple, blazing fast, for browser and node js object schema validator
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][github-image]][github-url]
@@ -23,10 +23,34 @@
 ## Usage Example
 
 Create data ascertain
-```js
-import ascertain, { optional, and, or, $keys, $values } from 'ascertain';
+```typescript
+import ascertain, { optional, and, or, $keys, $values, Schema } from 'ascertain';
 
-export default ascertain({
+// create data sample
+const data = {
+  number: 1,
+  string: 'string',
+  boolean: true,
+  function: () => {},
+  array: [],
+  object: {},
+  date: new Date,
+  regexp: 'regexp',
+  oneOfValue: 1,
+  arrayOfNumbers: [1,2,3,4,5],
+  objectSchema: {
+    number: 1,
+  },
+  optional: null,
+  keyValue: {
+    keyOne: 1,
+    keyTwo: 2,
+    keyThree: 3,
+  },
+};
+
+// create data schema
+const schema: Schema<typeof data> = {
   number: Number,
   string: String,
   boolean: Boolean,
@@ -47,35 +71,11 @@ export default ascertain({
     [$keys]: /^key[A-Z]/,
     [$values]: Number
   },
-});
+};
+
+// validate
+const validate = ascertain<typeof data>(schema, data, '[DATA]');
 ```
-
-Validate your data
-```js
-import validate from './validate.js'
-
-validate({
-  number: 1,
-  string: 'string',
-  boolean: true,
-  function: () => {},
-  array: [],
-  object: {},
-  date: new Date,
-  regexp: 'regexp',
-  oneOfValue: 1,
-  arrayOfNumbers: [1,2,3,4,5],
-  objectSchema: {
-    number: 1,
-  },
-  optional: null,
-  keyValue: {
-    keyOne: 1,
-    keyTwo: 2,
-    keyThree: 3,
-  },
-});
-````
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)

@@ -137,11 +137,9 @@ function ascertain(target, schema, path, optional) {
   }
 }
 
-export default (schema, rootName = '[root]') => {
-  return data => {
-    const result = ascertain(data, schema, rootName);
-    if (result instanceof AssertError) {
-      throw new TypeError(result.toString());
-    }
-  };
+export default (schema, data, rootName = '[root]') => {
+  const result = ascertain(data, schema, rootName);
+  if (result instanceof AssertError) {
+    throw new TypeError(result.toString());
+  }
 };
