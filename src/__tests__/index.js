@@ -1,4 +1,4 @@
-import ascertain, { optional, and, or, $keys, $values } from '../index';
+import { ascertain, optional, and, or, $keys, $values } from '../index';
 
 const fixture = {
   a: 1, b: 'test', c: true, d: [1, 2, 3, 4, 5], e: { f: 1 }, f() {

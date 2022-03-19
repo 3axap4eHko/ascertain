@@ -17,4 +17,6 @@ export interface Ascertain {
     (data: any): void;
 }
 
+export function ascertain<T extends Data = any>(schema: Schema<T>, data: any, rootName?: string): void;
+
 export default function <T extends Data = any>(schema: Schema<T>, data: any, rootName?: string): void;

@@ -63,12 +63,12 @@ export const or = (...schema) => {
 export const $keys = Symbol.for('@@keys');
 export const $values = Symbol.for('@@values');
 
-function ascertain(target, schema, path, optional) {
+function certain(target, schema, path, optional) {
   if (schema === null || typeof schema === 'undefined') {
     return new AssertError(schema, 'any value', path, 'schema value');
   }
   if (schema instanceof Optional) {
-    return ascertain(target, schema.schema, path, true);
+    return certain(target, schema.schema, path, true);
   }
   const isValue = target !== null && typeof target !== 'undefined';
   if (!isValue && optional) {
@@ -78,13 +78,13 @@ function ascertain(target, schema, path, optional) {
     if (!schema.schema.length) {
       return new AssertError(target, 'values', path, 'OR schema');
     }
-    return findNotError(schema.schema, schema => ascertain(target, schema, path));
+    return findNotError(schema.schema, schema => certain(target, schema, path));
   }
   if (schema instanceof And) {
     if (!schema.schema.length) {
       return new AssertError(target, 'values', path, 'AND schema');
     }
-    return findFirstError(schema.schema, schema => ascertain(target, schema, path));
+    return findFirstError(schema.schema, schema => certain(target, schema, path));
   }
 
   if (typeof schema === 'function') {
@@ -102,7 +102,7 @@ function ascertain(target, schema, path, optional) {
       return new AssertError(target, schema.constructor.name, path);
     }
     return findFirstError(target, (value, idx) => {
-      return findNotError(schema, itemSchemaType => ascertain(value, itemSchemaType, `${path}.${idx}`));
+      return findNotError(schema, itemSchemaType => certain(value, itemSchemaType, `${path}.${idx}`));
     });
   } else if (typeof schema === 'object') {
     if (schema instanceof RegExp) {
@@ -118,28 +118,30 @@ function ascertain(target, schema, path, optional) {
       }
       if ($keys in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, targetKey => ascertain(targetKey, schema[$keys], `${path}.${targetKey}`));
+        const assertError = findFirstError(targetKeys, targetKey => certain(targetKey, schema[$keys], `${path}.${targetKey}`));
         if (assertError) {
           return assertError;
         }
       }
       if ($values in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, targetKey => ascertain(target[targetKey], schema[$values], `${path}.${targetKey}`));
+        const assertError = findFirstError(targetKeys, targetKey => certain(target[targetKey], schema[$values], `${path}.${targetKey}`));
         if (assertError) {
           return assertError;
         }
       }
-      return findFirstError(Object.keys(schema), key => ascertain(target[key], schema[key], `${path}.${key}`));
+      return findFirstError(Object.keys(schema), key => certain(target[key], schema[key], `${path}.${key}`));
     }
   } else if (target !== schema) {
     return new AssertError(target, schema, path);
   }
 }
 
-export default (schema, data, rootName = '[root]') => {
-  const result = ascertain(data, schema, rootName);
+export const ascertain = (schema, data, rootName = '[root]') => {
+  const result = certain(data, schema, rootName);
   if (result instanceof AssertError) {
     throw new TypeError(result.toString());
   }
 };
+
+export default ascertain;
