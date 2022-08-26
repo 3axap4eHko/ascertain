@@ -1,10 +1,9 @@
-import { ascertain, optional, and, or, $keys, $values } from '../index';
+import { ascertain, optional, and, or, $keys, $values, as } from '../index';
 
 const fixture = {
   a: 1, b: 'test', c: true, d: [1, 2, 3, 4, 5], e: { f: 1 }, f() {
   }, g: null, h: new Date(),
 };
-
 
 describe('Ascertain test suite', () => {
   it('Should throw an error for null or undefined schema', () => {
@@ -13,6 +12,41 @@ describe('Ascertain test suite', () => {
 
   it('Should throw an error for null or undefined target', () => {
     expect(() => ascertain({}, null)).toThrow('Invalid value null specified by path [root] expected an object');
+  });
+
+  it.each([
+    { value: '-1', cast: 'number', expected: -1 },
+    { value: '0', cast: 'number', expected: 0 },
+    { value: '1', cast: 'number', expected: 1 },
+    { value: '0.1', cast: 'number', expected: 0.1 },
+    { value: '1', cast: 'boolean', expected: true },
+    { value: 'true', cast: 'boolean', expected: true },
+    { value: 'test', cast: 'boolean', expected: true },
+    { value: undefined, cast: 'boolean', expected: false },
+    { value: '0', cast: 'boolean', expected: false },
+    { value: 'false', cast: 'boolean', expected: false },
+    { value: '', cast: 'boolean', expected: false },
+    { value: '1,2,3,4,5', cast: 'array', expected: ['1','2','3','4','5'], arg: ',' },
+    { value: '{}', cast: 'json', expected: {} },
+  ])('Should cast value `$value` to $cast $expected', ({ value, cast, expected, arg }) => {
+    const result = as[cast](value, arg);
+    expect(result).toEqual(expected)
+  });
+
+  it.each([
+    { value: undefined, cast: 'number', expected: undefined },
+    { value: '', cast: 'number', expected: undefined },
+    { value: 'a', cast: 'number', expected: undefined },
+    { value: undefined, cast: 'number', expected: undefined },
+    { value: '', cast: 'number', expected: undefined },
+    { value: '', cast: 'number', expected: undefined },
+    { value: 'a', cast: 'number', expected: undefined },
+    { value: undefined, cast: 'array', expected: undefined },
+    { value: undefined, cast: 'json', expected: undefined },
+    { value: '', cast: 'json', expected: undefined },
+  ])('Should not cast value `$value` to $cast', ({ value, cast, expected, arg }) => {
+    const result = as[cast](value, arg);
+    expect(result).toEqual(expected)
   });
 
   it.each([

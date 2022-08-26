@@ -63,6 +63,22 @@ export const or = (...schema) => {
 export const $keys = Symbol.for('@@keys');
 export const $values = Symbol.for('@@values');
 
+export const as = {
+  number: (value) => {
+    const result = parseFloat(value);
+    return Number.isNaN(result) ? undefined : result;
+  },
+  boolean: (value) => value ? !/^(0|false)$/i.test(value) : !!value,
+  array: (value, delimiter) => value ? value.split(delimiter): undefined,
+  json: (value) => {
+    try {
+      return JSON.parse(value)
+    } catch (e) {
+      return undefined;
+    }
+  }
+};
+
 function certain(target, schema, path, optional) {
   if (schema === null || typeof schema === 'undefined') {
     return new AssertError(schema, 'any value', path, 'schema value');

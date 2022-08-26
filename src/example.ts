@@ -1,4 +1,4 @@
-import validate, { optional, and, or, $keys, $values, Schema } from '.';
+import validate, { optional, and, or, $keys, $values, Schema, as } from '.';
 
 const data = {
   number: 1,
@@ -20,6 +20,10 @@ const data = {
     keyTwo: 2,
     keyThree: 3,
   },
+  parsedNumber: as.number('1'),
+  parsedBoolean: as.boolean('false'),
+  parsedArray: as.array('1,2,3,4,5', ','),
+  parsedJSON: as.json('{}'),
 };
 
 const schema: Schema<typeof data> = {

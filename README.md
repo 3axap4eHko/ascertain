@@ -24,7 +24,7 @@
 
 Create data ascertain
 ```typescript
-import ascertain, { optional, and, or, $keys, $values, Schema } from 'ascertain';
+import ascertain, { optional, and, or, $keys, $values, Schema, as } from 'ascertain';
 
 // create data sample
 const data = {
@@ -47,6 +47,11 @@ const data = {
     keyTwo: 2,
     keyThree: 3,
   },
+  // fault tolernat type casting
+  parsedNumber: as.number('1'),
+  parsedBoolean: as.boolean('false'),
+  parsedArray: as.array('1,2,3,4,5', ','),
+  parsedJSON: as.json('{ "number": 1 }'),
 };
 
 // create data schema
@@ -71,6 +76,12 @@ const schema: Schema<typeof data> = {
     [$keys]: /^key[A-Z]/,
     [$values]: Number
   },
+  parsedNumber: Number,
+  parsedBoolean: Boolean,
+  parsedArray: [String],
+  parsedJSON: {
+    number: 1,
+  },
 };
 
 // validate
@@ -79,7 +90,7 @@ const validate = ascertain<typeof data>(schema, data, '[DATA]');
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2021 Ivan Zakharchanka
+Copyright (c) 2022 Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200

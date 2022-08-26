@@ -13,6 +13,15 @@ export function optional<T = any>(schema: Schema<T>): Schema<any>;
 export function and<T = any>(...schema: Schema<T>[]): Schema<any>;
 export function or<T = any>(...schemas: Schema<T>[]): Schema<any>;
 
+interface As {
+    number: (value: string | undefined) => number,
+    boolean: (value: string | undefined) => boolean,
+    array: (value: string | undefined, delimiter: string | RegExp) => string[];
+    json: <T>(value: string | undefined) => T;
+}
+
+export const as: As;
+
 export interface Ascertain {
     (data: any): void;
 }
