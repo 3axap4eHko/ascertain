@@ -18,6 +18,7 @@ interface As {
     boolean: (value: string | undefined) => boolean,
     array: (value: string | undefined, delimiter: string | RegExp) => string[];
     json: <T>(value: string | undefined) => T;
+    base64: (value: string | undefined) => string | undefined;
 }
 
 export const as: As;

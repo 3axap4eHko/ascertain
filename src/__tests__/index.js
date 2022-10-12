@@ -28,6 +28,7 @@ describe('Ascertain test suite', () => {
     { value: '', cast: 'boolean', expected: false },
     { value: '1,2,3,4,5', cast: 'array', expected: ['1','2','3','4','5'], arg: ',' },
     { value: '{}', cast: 'json', expected: {} },
+    { value: 'dGVzdA==', cast: 'base64', expected: 'test' },
   ])('Should cast value `$value` to $cast $expected', ({ value, cast, expected, arg }) => {
     const result = as[cast](value, arg);
     expect(result).toEqual(expected)
@@ -44,6 +45,7 @@ describe('Ascertain test suite', () => {
     { value: undefined, cast: 'array', expected: undefined },
     { value: undefined, cast: 'json', expected: undefined },
     { value: '', cast: 'json', expected: undefined },
+    { value: undefined, cast: 'base64', expected: undefined },
   ])('Should not cast value `$value` to $cast', ({ value, cast, expected, arg }) => {
     const result = as[cast](value, arg);
     expect(result).toEqual(expected)

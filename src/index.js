@@ -63,6 +63,8 @@ export const or = (...schema) => {
 export const $keys = Symbol.for('@@keys');
 export const $values = Symbol.for('@@values');
 
+const fromBase64 = typeof Buffer === 'undefined' ? value => atob(value) : value => Buffer.from(value, 'base64').toString('utf-8');
+
 export const as = {
   number: (value) => {
     const result = parseFloat(value);
@@ -76,7 +78,18 @@ export const as = {
     } catch (e) {
       return undefined;
     }
-  }
+  },
+  base64: (value) => {
+    try {
+      return fromBase64(value);
+    } catch (e) {
+      return undefined;
+    }
+  },
+};
+
+export const toggle = (key, cases, defaultKey) => {
+  return cases[key] ?? cases[defaultKey] ?? undefined;
 };
 
 function certain(target, schema, path, optional) {

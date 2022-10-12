@@ -52,6 +52,7 @@ const data = {
   parsedBoolean: as.boolean('false'),
   parsedArray: as.array('1,2,3,4,5', ','),
   parsedJSON: as.json('{ "number": 1 }'),
+  parsedBase64: as.base64('dGVzdA=='),
 };
 
 // create data schema
@@ -82,6 +83,7 @@ const schema: Schema<typeof data> = {
   parsedJSON: {
     number: 1,
   },
+  parsedBase64: String,
 };
 
 // validate
