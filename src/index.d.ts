@@ -14,11 +14,12 @@ export function and<T = any>(...schema: Schema<T>[]): Schema<any>;
 export function or<T = any>(...schemas: Schema<T>[]): Schema<any>;
 
 interface As {
+    string: (value: string | undefined) => string,
     number: (value: string | undefined) => number,
     boolean: (value: string | undefined) => boolean,
     array: (value: string | undefined, delimiter: string | RegExp) => string[];
     json: <T>(value: string | undefined) => T;
-    base64: (value: string | undefined) => string | undefined;
+    base64: (value: string | undefined) => string;
 }
 
 export const as: As;

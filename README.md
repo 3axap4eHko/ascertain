@@ -49,6 +49,7 @@ const data = {
   },
   // fault tolernat type casting
   parsedNumber: as.number('1'),
+  parsedString: as.number('string'),
   parsedBoolean: as.boolean('false'),
   parsedArray: as.array('1,2,3,4,5', ','),
   parsedJSON: as.json('{ "number": 1 }'),
@@ -78,6 +79,7 @@ const schema: Schema<typeof data> = {
     [$values]: Number
   },
   parsedNumber: Number,
+  parsedString: String,
   parsedBoolean: Boolean,
   parsedArray: [String],
   parsedJSON: {

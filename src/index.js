@@ -66,12 +66,15 @@ export const $values = Symbol.for('@@values');
 const fromBase64 = typeof Buffer === 'undefined' ? value => atob(value) : value => Buffer.from(value, 'base64').toString('utf-8');
 
 export const as = {
+  string: (value) => {
+    return typeof value === "string" ? value : undefined;
+  },
   number: (value) => {
     const result = parseFloat(value);
-    return Number.isNaN(result) ? undefined : result;
+    return Number.isFinite(result) ? result : undefined;
   },
-  boolean: (value) => value ? !/^(0|false)$/i.test(value) : !!value,
-  array: (value, delimiter) => value ? value.split(delimiter): undefined,
+  boolean: (value) => /^(0|1|true|false|enabled|disabled)$/i.test(value) ? /^(1|true|enabled)$/i.test(value) : undefined,
+  array: (value, delimiter) => value?.split(delimiter) ?? undefined,
   json: (value) => {
     try {
       return JSON.parse(value)
