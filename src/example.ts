@@ -1,5 +1,6 @@
 import validate, { optional, and, or, $keys, $values, Schema, as } from '.';
 
+// create data sample
 const data = {
   number: 1,
   string: 'string',
@@ -20,24 +21,45 @@ const data = {
     keyTwo: 2,
     keyThree: 3,
   },
+  // fault tolernat type casting
   parsedNumber: as.number('1'),
+  parsedString: as.number('string'),
   parsedBoolean: as.boolean('false'),
   parsedArray: as.array('1,2,3,4,5', ','),
-  parsedJSON: as.json('{}'),
+  parsedJSON: as.json('{ "number": 1 }'),
+  parsedBase64: as.base64('dGVzdA=='),
 };
 
+// create data schema
 const schema: Schema<typeof data> = {
-  [$keys]: Number,
-  [$values]: Object,
-  number: optional(Number),
-  objectSchema: optional<typeof data.objectSchema>({
-    number: Number
+  number: Number,
+  string: String,
+  boolean: Boolean,
+  function: Function,
+  array: Array,
+  object: Object,
+  date: and(Date, { toJSON: Function }),
+  regexp: /regexp/,
+  oneOfValue: or(1, 2, 3),
+  arrayOfNumbers: [Number],
+  objectSchema: {
+    number: Number,
+  },
+  optional: optional({
+    number: Number,
   }),
-  array: and(Object, Array),
-  keyValue: or<typeof data.keyValue>(
-    { keyOne: Number },
-    { keyThree: Number }
-  ),
+  keyValue: {
+    [$keys]: /^key[A-Z]/,
+    [$values]: Number
+  },
+  parsedNumber: Number,
+  parsedString: String,
+  parsedBoolean: Boolean,
+  parsedArray: [String],
+  parsedJSON: {
+    number: 1,
+  },
+  parsedBase64: String,
 };
 
 validate<typeof data>(schema, data, '[DATA]');
