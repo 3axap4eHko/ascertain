@@ -48,7 +48,7 @@ function Or(schema) {
   this.schema = schema;
 }
 
-export const optional = schema => {
+export const optional = (schema) => {
   return new Optional(schema);
 };
 
@@ -63,21 +63,43 @@ export const or = (...schema) => {
 export const $keys = Symbol.for('@@keys');
 export const $values = Symbol.for('@@values');
 
-const fromBase64 = typeof Buffer === 'undefined' ? value => atob(value) : value => Buffer.from(value, 'base64').toString('utf-8');
+export const fromBase64 =
+  typeof Buffer === 'undefined' ? (value) => atob(value) : (value) => Buffer.from(value, 'base64').toString('utf-8');
+
+const MULTIPLIERS = {
+  ms: 1,
+  s: 1000,
+  m: 60000,
+  h: 3600000,
+  d: 86400000,
+  w: 604800000,
+};
 
 export const as = {
   string: (value) => {
-    return typeof value === "string" ? value : undefined;
+    return typeof value === 'string' ? value : undefined;
   },
   number: (value) => {
     const result = parseFloat(value);
     return Number.isFinite(result) ? result : undefined;
   },
-  boolean: (value) => /^(0|1|true|false|enabled|disabled)$/i.test(value) ? /^(1|true|enabled)$/i.test(value) : undefined,
+  date: (value) => {
+    const result = Date.parse(value);
+    return Number.isFinite(result) ? new Date(result) : undefined;
+  },
+  time: (value) => {
+    const matches = value?.match(/^(\d+)(ms|s|m|h|d|w)?$/);
+    if (matches) {
+      const [_, amount, unit = 'ms'] = matches;
+      return parseInt(amount, 10) * MULTIPLIERS[unit];
+    }
+    return undefined;
+  },
+  boolean: (value) => (/^(0|1|true|false|enabled|disabled)$/i.test(value) ? /^(1|true|enabled)$/i.test(value) : undefined),
   array: (value, delimiter) => value?.split(delimiter) ?? undefined,
   json: (value) => {
     try {
-      return JSON.parse(value)
+      return JSON.parse(value);
     } catch (e) {
       return undefined;
     }
@@ -89,10 +111,6 @@ export const as = {
       return undefined;
     }
   },
-};
-
-export const toggle = (key, cases, defaultKey) => {
-  return cases[key] ?? cases[defaultKey] ?? undefined;
 };
 
 function certain(target, schema, path, optional) {
@@ -110,13 +128,13 @@ function certain(target, schema, path, optional) {
     if (!schema.schema.length) {
       return new AssertError(target, 'values', path, 'OR schema');
     }
-    return findNotError(schema.schema, schema => certain(target, schema, path));
+    return findNotError(schema.schema, (schema) => certain(target, schema, path));
   }
   if (schema instanceof And) {
     if (!schema.schema.length) {
       return new AssertError(target, 'values', path, 'AND schema');
     }
-    return findFirstError(schema.schema, schema => certain(target, schema, path));
+    return findFirstError(schema.schema, (schema) => certain(target, schema, path));
   }
 
   if (typeof schema === 'function') {
@@ -126,7 +144,7 @@ function certain(target, schema, path, optional) {
     if (typeof target === 'object' && !(target instanceof schema)) {
       return new AssertError(target, schema.name, path);
     }
-    if (typeof target !== 'object' && (target.constructor !== schema)) {
+    if (typeof target !== 'object' && target.constructor !== schema) {
       return new AssertError(target, schema.name, path);
     }
   } else if (Array.isArray(schema)) {
@@ -134,7 +152,7 @@ function certain(target, schema, path, optional) {
       return new AssertError(target, schema.constructor.name, path);
     }
     return findFirstError(target, (value, idx) => {
-      return findNotError(schema, itemSchemaType => certain(value, itemSchemaType, `${path}.${idx}`));
+      return findNotError(schema, (itemSchemaType) => certain(value, itemSchemaType, `${path}.${idx}`));
     });
   } else if (typeof schema === 'object') {
     if (schema instanceof RegExp) {
@@ -150,19 +168,23 @@ function certain(target, schema, path, optional) {
       }
       if ($keys in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, targetKey => certain(targetKey, schema[$keys], `${path}.${targetKey}`));
+        const assertError = findFirstError(targetKeys, (targetKey) =>
+          certain(targetKey, schema[$keys], `${path}.${targetKey}`)
+        );
         if (assertError) {
           return assertError;
         }
       }
       if ($values in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, targetKey => certain(target[targetKey], schema[$values], `${path}.${targetKey}`));
+        const assertError = findFirstError(targetKeys, (targetKey) =>
+          certain(target[targetKey], schema[$values], `${path}.${targetKey}`)
+        );
         if (assertError) {
           return assertError;
         }
       }
-      return findFirstError(Object.keys(schema), key => certain(target[key], schema[key], `${path}.${key}`));
+      return findFirstError(Object.keys(schema), (key) => certain(target[key], schema[key], `${path}.${key}`));
     }
   } else if (target !== schema) {
     return new AssertError(target, schema, path);

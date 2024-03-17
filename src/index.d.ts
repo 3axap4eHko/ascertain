@@ -16,6 +16,8 @@ export function or<T = any>(...schemas: Schema<T>[]): Schema<any>;
 interface As {
     string: (value: string | undefined) => string,
     number: (value: string | undefined) => number,
+    date: (value: string | undefined) => Date,
+    time: (value: string | undefined) => number,
     boolean: (value: string | undefined) => boolean,
     array: (value: string | undefined, delimiter: string | RegExp) => string[];
     json: <T>(value: string | undefined) => T;

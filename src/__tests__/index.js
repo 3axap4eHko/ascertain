@@ -15,10 +15,14 @@ describe('Ascertain test suite', () => {
   });
 
   it.each([
+    { value: '', cast: 'string', expected: undefined },
     { value: '-1', cast: 'number', expected: -1 },
     { value: '0', cast: 'number', expected: 0 },
     { value: '1', cast: 'number', expected: 1 },
     { value: '0.1', cast: 'number', expected: 0.1 },
+    { value: '2020-10-10', cast: 'date', expected: new Date('2020-10-10') },
+    { value: '24h', cast: 'time', expected: 86400000 },
+    { value: '100', cast: 'time', expected: 100 },
     { value: '1', cast: 'boolean', expected: true },
     { value: 'true', cast: 'boolean', expected: true },
     { value: 'enabled', cast: 'boolean', expected: true },
@@ -34,6 +38,7 @@ describe('Ascertain test suite', () => {
   });
 
   it.each([
+    { value: undefined, cast: 'string', expected: undefined },
     { value: undefined, cast: 'number', expected: undefined },
     { value: '', cast: 'number', expected: undefined },
     { value: 'a', cast: 'number', expected: undefined },
@@ -41,6 +46,8 @@ describe('Ascertain test suite', () => {
     { value: '', cast: 'number', expected: undefined },
     { value: '', cast: 'number', expected: undefined },
     { value: 'a', cast: 'number', expected: undefined },
+    { value: 'a', cast: 'date', expected: undefined },
+    { value: 'a', cast: 'time', expected: undefined },
     { value: undefined, cast: 'boolean', expected: undefined },
     { value: 'any', cast: 'boolean', expected: undefined },
     { value: '', cast: 'boolean', expected: undefined },
