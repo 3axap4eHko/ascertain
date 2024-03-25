@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/swcrc",
+  "module": {
+    "type": "commonjs",
+    "strict": true,
+    "strictMode": true
+  },
+  "jsc": {
+    "target": "es2022",
+    "parser": {
+      "syntax": "ecmascript"
+    },
+    "externalHelpers": false,
+    "keepClassNames": true
+  }
+}

@@ -15,7 +15,7 @@ describe('Ascertain test suite', () => {
   });
 
   it.each([
-    { value: '', cast: 'string', expected: undefined },
+    { value: '', cast: 'string', expected: '' },
     { value: '-1', cast: 'number', expected: -1 },
     { value: '0', cast: 'number', expected: 0 },
     { value: '1', cast: 'number', expected: 1 },
