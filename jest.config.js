@@ -1,7 +1,7 @@
-const { readFileSync } = require('node:fs');
+import { readFileSync } from 'node:fs';
 const swcrc = JSON.parse(readFileSync('.swcrc', 'utf8'));
 
-module.exports = {
+export default {
   verbose: true,
   collectCoverage: !!process.env.CI || !!process.env.COVERAGE,
   collectCoverageFrom: [
