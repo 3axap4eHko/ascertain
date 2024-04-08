@@ -2,10 +2,21 @@
   "name": "ascertain",
   "version": "0.13.4",
   "description": "0-Deps, simple, fast, for browser and node js object schema validator",
-  "main": "build/index.js",
+  "type": "module",
   "types": "build/index.d.ts",
+  "main": "build/index.cjs",
+  "module": "build/index.js",
+  "exports": {
+    "require": "./build/index.cjs",
+    "import": "./build/index.js"
+  },
+  "files": [
+    "build",
+    "src/index.js"
+  ],
   "scripts": {
-    "build": "NODE_ENV=production swc src/index.js -d build --ignore **/__tests__,**/__fixtures__ --strip-leading-paths && cp src/index.d.ts build",
+    "build": "rm -rf build && NODE_ENV=production inop src/ build -t js -i __tests__ && cp src/index.d.ts build",
+    "build:2": "NODE_ENV=production swc src/index.js -d build --ignore **/__tests__,**/__fixtures__ --strip-leading-paths && cp src/index.d.ts build",
     "test": "NODE_ENV=test jest",
     "test:cov": "COVERAGE=1 NODE_ENV=test jest"
   },
@@ -36,6 +47,7 @@
     "@swc/cli": "^0.3.12",
     "@swc/core": "^1.4.12",
     "@swc/jest": "^0.2.36",
+    "inop": "^0.6.0",
     "jest": "^29.7.0"
   }
 }
