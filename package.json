@@ -1,6 +1,6 @@
 {
   "name": "ascertain",
-  "version": "0.14.4",
+  "version": "0.14.5",
   "description": "0-Deps, simple, fast, for browser and node js object schema validator",
   "type": "module",
   "types": "build/index.d.ts",
