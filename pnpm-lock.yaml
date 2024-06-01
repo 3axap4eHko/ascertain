@@ -15,8 +15,8 @@ devDependencies:
     specifier: ^0.2.36
     version: 0.2.36(@swc/core@1.5.24)
   inop:
-    specifier: ^0.6.13
-    version: 0.6.13
+    specifier: ^0.6.14
+    version: 0.6.14
   jest:
     specifier: ^29.7.0
     version: 29.7.0
@@ -1714,8 +1714,8 @@ packages:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
     dev: true
 
-  /inop@0.6.13:
-    resolution: {integrity: sha512-62L2Zw6u/jLAG84wiGt1IUaqkk3hgoVXQXczAmo9rBQIog+LDmub091bXNAMEK1Ujlt52P/5FBIdMAlwlO77EQ==}
+  /inop@0.6.14:
+    resolution: {integrity: sha512-uTZDOUeKYozqSz4NChbqsFUtB4SiMIIUwvV3/XWEH08YBW2p3poOueHLyzb4kBA0CA5dCh2EAds2xJSXGV9+jQ==}
     engines: {node: '>=16'}
     hasBin: true
     dependencies:
