@@ -45,9 +45,9 @@
   "homepage": "https://github.com/3axap4eHko/ascertain#readme",
   "devDependencies": {
     "@swc/cli": "^0.3.12",
-    "@swc/core": "^1.6.1",
+    "@swc/core": "^1.6.3",
     "@swc/jest": "^0.2.36",
-    "inop": "^0.6.24",
+    "inop": "^0.6.25",
     "jest": "^29.7.0"
   }
 }
