@@ -1,25 +1,12 @@
-import { readFileSync } from 'node:fs';
-const swcrc = JSON.parse(readFileSync('.swcrc', 'utf8'));
-
 export default {
   verbose: true,
-  collectCoverage: !!process.env.CI || !!process.env.COVERAGE,
-  collectCoverageFrom: [
-    'src/**/*.js',
-  ],
-  coveragePathIgnorePatterns: [
-    '/node_modules/',
-    '__fixtures__',
-    '__mocks__',
-    '__tests__',
-  ],
+  collectCoverage: !!process.env.CI,
+  collectCoverageFrom: ['src/**/*.ts'],
+  testEnvironment: 'node',
+  coveragePathIgnorePatterns: ['/coverage', '/node_modules/', '__tests__'],
   coverageDirectory: './coverage',
   transform: {
-    '^.+\\.js$': ['@swc/jest', {
-      ...swcrc,
-      module: {
-        type: 'commonjs',
-      },
-    }],
+    '\\.ts$': '@swc/jest',
   },
+  testMatch: ['**/__tests__/**/*.ts'],
 };

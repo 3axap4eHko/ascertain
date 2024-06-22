@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext"],
+    "rootDir": "src",
+    "outDir": "build"
+  },
+  "include": [
+    "src/**/*.ts"
+, "src/__benchmark__/index.js"  ],
+  "exclude": [
+    "**/__tests__",
+    "node_modules",
+    "**/*.tmp.ts"
+  ]
+}

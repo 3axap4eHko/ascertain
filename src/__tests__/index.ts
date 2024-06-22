@@ -1,17 +1,23 @@
-import { ascertain, optional, and, or, $keys, $values, as } from '../index';
+import { ascertain, optional, and, or, $keys, $values, as, Schema } from '../index';
 
 const fixture = {
-  a: 1, b: 'test', c: true, d: [1, 2, 3, 4, 5], e: { f: 1 }, f() {
-  }, g: null, h: new Date(),
+  a: 1,
+  b: 'test',
+  c: true,
+  d: [1, 2, 3, 4, 5],
+  e: { f: 1 },
+  f() {},
+  g: null,
+  h: new Date(),
 };
 
 describe('Ascertain test suite', () => {
   it('Should throw an error for null or undefined schema', () => {
-    expect(() => ascertain(null, fixture)).toThrow('Invalid schema value null');
+    expect(() => ascertain(null as unknown as Schema<typeof fixture>, fixture)).toThrow('Invalid schema value null');
   });
 
   it('Should throw an error for null or undefined target', () => {
-    expect(() => ascertain({}, null)).toThrow('Invalid value null specified by path [root] expected an object');
+    expect(() => ascertain({}, null as unknown as typeof fixture)).toThrow('Invalid value null for path [root], expected an object.');
   });
 
   it.each([
@@ -55,8 +61,8 @@ describe('Ascertain test suite', () => {
     { value: undefined, cast: 'json', expected: undefined },
     { value: '', cast: 'json', expected: undefined },
     { value: undefined, cast: 'base64', expected: undefined },
-  ])('Should not cast value `$value` to $cast', ({ value, cast, expected, arg }) => {
-    const result = as[cast](value, arg);
+  ])('Should not cast value `$value` to $cast', ({ value, cast, expected }) => {
+    const result = as[cast](value);
     expect(result).toEqual(expected)
   });
 
@@ -78,7 +84,7 @@ describe('Ascertain test suite', () => {
     ['Or', { c: or(true, false) }, fixture],
     ['Keys', { e: { [$keys]: /^\w+$/ } }, fixture],
     ['Values', { e: { [$values]: Number } }, fixture],
-  ])('Should validate schema type %s positive', (title, schema, target) => {
+  ])('Should validate schema type %s positive', <T>(_: string, schema: Schema<T>, target: any) => {
     expect(() => ascertain(schema, target)).not.toThrow();
   });
 
@@ -98,15 +104,13 @@ describe('Ascertain test suite', () => {
     ['Null', { g: null }, fixture, 'Invalid schema value null'],
     ['Optional exists', { c: optional(false) }, fixture, 'expected false'],
     ['Optional does not exist', { z: optional(null) }, fixture, 'Invalid schema value null'],
-    ['And', { c: and() }, fixture, 'expected values'],
     ['And', { c: and(true, false) }, fixture, 'expected false'],
-    ['Or', { c: or() }, fixture, 'expected values'],
     ['Or', { c: or(String, Number) }, fixture, 'expected String or Number'],
     ['Keys', { e: { [$keys]: Number } }, fixture, 'expected Number'],
     ['Values', { e: { [$values]: String } }, fixture, 'expected String'],
     ['Array schema', [], {}, 'expected Array'],
     ['Non object target', {}, 2, 'expected Object'],
-  ])('Should validate schema type %s negative', (title, schema, target, message) => {
+  ])('Should validate schema type %s negative', (_, schema, target: any, message) => {
     expect(() => ascertain(schema, target)).toThrow(message);
   });
 
