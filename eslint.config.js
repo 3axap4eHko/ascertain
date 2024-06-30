@@ -1,4 +1,3 @@
-import js from '@eslint/js';
 import prettier from 'eslint-plugin-prettier';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
@@ -6,11 +5,6 @@ import tsParser from '@typescript-eslint/parser';
 const ignores = ['docs', 'build', 'coverage', 'node_modules', '*.tmp.*', 'src/__tests__/*'];
 
 export default [
-  {
-    ...js.configs.recommended,
-    files: ['**/*.js'],
-    ignores,
-  },
   {
     files: ['src/**/*.ts'],
 
