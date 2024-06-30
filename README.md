@@ -2,7 +2,7 @@
 
 ### Ascertain what data is not suitable for your library
 
-0-Deps, simple, blazing fast, for browser and node js object schema validator
+0-Deps, simple, blazing fast, for browser and Node.js object schema validator
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][github-image]][github-url]
@@ -14,8 +14,16 @@
 
 - Type-safe validation: Ensures your data conforms to predefined schemas.
 - Composite schemas: Supports logical AND, OR, and optional schemas.
-- Type casting: Automatically parse and cast strings to other types.
+- Type casting: Automatically parses and casts strings to other types.
 - Error handling: Provides detailed error messages for invalid data.
+
+## Schema description
+
+ - Primitive Values: Any primitive value (e.g., string, number, bigint, boolean, undefined, symbol, null) is used as an expected constant to match against.
+ - Function Types: Functions are used as constructors for non-objects and instance types for object types.
+ - Array Values: Arrays are used to represent an expected array type, where every item in the array must match the specified type (acting as an "and" operator).
+ - Regular Expressions: Regular expressions are used to validate that a value matches a specified string pattern.
+ - Object Types: Non-null objects are used as templates for expected properties, where each property of the object must match the corresponding schema definition.
 
 ## Usage Example
 
@@ -131,6 +139,43 @@ const schema: Schema<typeof data> = {
 
 // validate
 const validate = ascertain<typeof data>(schema, data, '[DATA]');
+```
+
+### Benchmark VS zod and ajv
+```
+⭐ Script ajv-vs-zod-vs-ascertain.js
+  ⇶ Suite ajv vs zod vs ascertain
+    ➤ Perform benchmark
+      ✓ Measure 500000 zod static schema validation
+        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
+        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
+        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
+        │ 0.000699 │ 0.000788 │ 0.000996 │ 0.001624 │ 462.602373 │ 500000 │
+        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
+      ✓ Measure 500000 zod dynamic schema validation
+        ┌──────────┬──────────┬──────────┬──────────┬─────────────┬────────┐
+        │ (index)  │ med      │ p95      │ p99      │ total       │ count  │
+        ├──────────┼──────────┼──────────┼──────────┼─────────────┼────────┤
+        │ 0.006248 │ 0.006918 │ 0.007524 │ 0.016948 │ 3780.465563 │ 500000 │
+        └──────────┴──────────┴──────────┴──────────┴─────────────┴────────┘
+      ✓ Measure 500000 ascertain static schema validation
+        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
+        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
+        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
+        │ 0.000063 │ 0.000071 │ 0.000098 │ 0.000267 │ 41.673271 │ 500000 │
+        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
+      ✓ Measure 500000 ascertain dynamic schema validation
+        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
+        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
+        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
+        │ 0.000367 │ 0.000415 │ 0.000525 │ 0.001055 │ 239.078129 │ 500000 │
+        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
+      ✓ Measure 500000 ajv compiled schema validation
+        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
+        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
+        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
+        │ 0.000063 │ 0.000072 │ 0.000124 │ 0.000307 │ 44.542936 │ 500000 │
+        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
 ```
 
 ## License

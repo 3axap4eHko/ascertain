@@ -1,7 +1,4 @@
 export class AssertError extends TypeError {
-  static join(errors: AssertError[], separator = ' or ') {
-    return new AssertError(errors[0].value, errors.map((e) => `${e.expected}`).join(separator), errors[0].path, errors[0].subject);
-  }
   constructor(
     public readonly value: unknown,
     public readonly expected: unknown,
@@ -12,11 +9,9 @@ export class AssertError extends TypeError {
   }
 }
 
-type AssertErrorConstructor = new (value: unknown, expected: unknown, path: string, subject?: string) => Error;
-
 type Keys = string | number | symbol;
 type DataValue = any;
-type Data = Record<Keys, unknown>;
+export type Data = Record<Keys, unknown>;
 type DataArray = DataValue[];
 
 export type Schema<T> = T extends Data ? { [S in keyof T]?: Schema<T[S]> } : T extends DataArray ? [Schema<T[number]>] : DataValue;
@@ -87,7 +82,7 @@ export const as = {
   },
   boolean: (value: string | undefined) =>
     /^(0|1|true|false|enabled|disabled)$/i.test(value as string) ? /^(1|true|enabled)$/i.test(value as string) : undefined,
-  array: (value: string | undefined, delimiter: string) => value?.split(delimiter) ?? undefined,
+  array: (value: string | undefined, delimiter: string) => value?.split?.(delimiter) ?? undefined,
   json: (value: string | undefined) => {
     try {
       return JSON.parse(value as string);
@@ -104,18 +99,13 @@ export const as = {
   },
 };
 
-export class Context {
-  public readonly Error: AssertErrorConstructor;
-  public readonly errors: AssertError[] = [];
+class Context {
+  public readonly Error: typeof AssertError;
   public readonly registry: unknown[] = [];
   private varIndex = 0;
+
   constructor(public readonly options: CompilerOptions = {}) {
     this.Error = options.error ?? AssertError;
-  }
-
-  error(errors: AssertError[]) {
-    this.errors.push(...errors);
-    return true;
   }
 
   register(value: unknown): number {
@@ -131,7 +121,7 @@ export class Context {
 }
 
 export interface CompilerOptions {
-  error?: AssertErrorConstructor;
+  error?: typeof AssertError;
 }
 
 const codeGen = <T extends Data = DataValue>(schema: Schema<T>, context: Context, valuePath: string, path: string): string => {
@@ -143,14 +133,17 @@ const codeGen = <T extends Data = DataValue>(schema: Schema<T>, context: Context
   const ${errorsAlias} = [];
   const ${valueAlias} = ${valuePath};
   ${code}
-  if (${errorsAlias}.length !== 0) { throw ctx.Error.join(${errorsAlias}, ' and '); }
+  if (${errorsAlias}.length !== 0) { throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"'); }
 `;
   } else if (schema instanceof Or) {
     const valueAlias = context.unique('v');
     const errorsAlias = context.unique('err');
     const code = schema.schemas
       .map((s) => codeGen(s, context, valueAlias, path))
-      .reduceRight((result, code) => `try {${code}} catch (e) {${errorsAlias}.push(e);${result}}`, `throw ctx.Error.join(${errorsAlias}, ' or ')`);
+      .reduceRight(
+        (result, code) => `try {${code}} catch (e) {${errorsAlias}.push(e);${result}}`,
+        `throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"');`,
+      );
     return `// Or
 const ${errorsAlias} = [];
 const ${valueAlias} = ${valuePath};
@@ -165,18 +158,17 @@ if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.sc
   } else if (schema instanceof Tuple) {
     const valueAlias = context.unique('v');
     const errorsAlias = context.unique('err');
-    const code = schema.schemas
-      .map((s, idx) => `try { ${codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`)} } catch (e) { ${errorsAlias}.push(e); }`)
-      .join('\n');
-    return `// Tuple
-  const ${valueAlias} = ${valuePath};
-  const ${errorsAlias} = [];
-  if (!Array.isArray(${valueAlias})) { throw new ctx.Error(${valueAlias}, 'Array', \`${path}\`); }
-  ${code}
-  if (${errorsAlias}.length !== 0) { throw ctx.Error.join(${errorsAlias}, ', '); }
-`;
-  }
-  if (typeof schema === 'function') {
+    const code: string[] = [
+      '// Tuple',
+      `const ${valueAlias} = ${valuePath};`,
+      `const ${errorsAlias} = [];`,
+      `if (!Array.isArray(${valueAlias})) { throw new ctx.Error(${valueAlias}, 'array', \`${path}\`); }`,
+      ...schema.schemas.map((s, idx) => `try { ${codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`)} } catch (e) { ${errorsAlias}.push(e); }`),
+      `if (${errorsAlias}.length !== 0) { throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"'); }`,
+    ];
+
+    return code.join('\n');
+  } else if (typeof schema === 'function') {
     const index = context.register(schema);
     const valueAlias = context.unique('v');
     const registryAlias = context.unique('r');
@@ -185,23 +177,27 @@ const ${valueAlias} = ${valuePath};
 const ${registryAlias} = ctx.registry[${index}];
 if (${valueAlias} === null || ${valueAlias} === undefined) { throw new ctx.Error(${valueAlias}, 'a non-nullable', \`${path}\`); }
 if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new ctx.Error(${valueAlias}?.constructor?.name, \`instance of \${${registryAlias}.name}\`, \`${path}\`, 'instance of'); }
-else if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new ctx.Error(${valueAlias}?.constructor?.name, ${registryAlias}.name, \`${path}\`, 'type'); }
+if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new ctx.Error(${valueAlias}?.constructor?.name, ${registryAlias}.name, \`${path}\`, 'type'); }
 `;
   } else if (Array.isArray(schema)) {
     const valueAlias = context.unique('v');
     const code: string[] = [
       `const ${valueAlias} = ${valuePath};`,
-      `if (!Array.isArray(${valueAlias})) { throw new ctx.Error(${valueAlias}, '${schema.constructor.name}', \`${path}\`); }`,
+      `if (!Array.isArray(${valueAlias})) { throw new ctx.Error(${valueAlias}, 'array', \`${path}\`); }`,
     ];
     if (schema.length > 0) {
       const value = context.unique('val');
       const key = context.unique('key');
       const errorsAlias = context.unique('err');
+      code.push(`const ${errorsAlias} = [];`);
+      code.push(
+        ...schema.map(
+          (s) =>
+            `${valueAlias}.forEach((${value},${key}) => { try { ${codeGen(s, context, value, `${path}[\${${key}}]`)} } catch(e){ ${errorsAlias}.push(e); } });`,
+        ),
+      );
 
-      const orCode = schema
-        .map((s) => codeGen(s, context, value, `${path}[\${${key}}]`))
-        .reduceRight((result, code) => `try {${code}} catch (e) {${errorsAlias}.push(e);${result}}`, `throw ctx.Error.join(${errorsAlias}, ' or ')`);
-      code.push(`for(const ${key} in ${valueAlias}) {`, `const ${errorsAlias} = [];`, `const ${value} = ${valueAlias}[${key}];`, orCode, `}`);
+      code.push(`if (${errorsAlias}.length !== 0) { throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"'); }`);
     }
     return code.join('\n');
   } else if (typeof schema === 'object' && schema !== null) {
@@ -215,8 +211,8 @@ if (!${schema.toString()}.test('' + ${valueAlias})) { throw new ctx.Error(${valu
       const valueAlias = context.unique('v');
       const code: string[] = [
         `const ${valueAlias} = ${valuePath};`,
+        `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new ctx.Error(${valueAlias}, 'object', \`${path}\`); }`,
         `if (typeof ${valueAlias} !== 'object') { throw new ctx.Error(${valueAlias}, '${schema.constructor.name}', \`${path}\`); }`,
-        `if (${valueAlias} === null) { throw new ctx.Error(${valueAlias}, 'object', \`${path}\`); }`,
       ];
       if ($keys in schema) {
         const keysAlias = context.unique('key');
@@ -224,8 +220,8 @@ if (!${schema.toString()}.test('' + ${valueAlias})) { throw new ctx.Error(${valu
         const value = context.unique('v');
         code.push(`
 const ${keysAlias} = Object.keys(${valueAlias});
-const ${errorsAlias} = ${keysAlias}.map((${value}) => { ${codeGen(schema[$keys], context, value, path)} }).flat().filter(Boolean);
-if (${errorsAlias}.length !== 0) { throw ctx.Error.join(${errorsAlias}, ', '); }
+const ${errorsAlias} = ${keysAlias}.flatMap((${value}) => { ${codeGen(schema[$keys], context, value, path)} }).filter(Boolean);
+if (${errorsAlias}.length !== 0) { throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"'); }
 `);
       }
       if ($values in schema) {
@@ -234,134 +230,134 @@ if (${errorsAlias}.length !== 0) { throw ctx.Error.join(${errorsAlias}, ', '); }
         const errorsAlias = context.unique('err');
         code.push(`{
 const ${valuesAlias} = Object.values(${valuePath});
-const ${errorsAlias} = ${valuesAlias}.map((${vAlias}) => { ${codeGen(schema[$values], context, vAlias, path)} }).flat().filter(Boolean);
-if (${errorsAlias}.length !== 0) { throw ctx.Error.join(${errorsAlias}, ', '); }
+const ${errorsAlias} = ${valuesAlias}.flatMap((${vAlias}) => { ${codeGen(schema[$values], context, vAlias, path)} }).filter(Boolean);
+if (${errorsAlias}.length !== 0) { throw new AggregateError(${errorsAlias}, 'Invalid value for path "${path}"'); }
 }`);
       }
       const keys = Object.keys(schema);
       code.push(...keys.map((key) => codeGen(schema[key], context, `${valueAlias}['${key}']`, `${path}.${key}`)));
       return `{${code.join('\n')}}`;
     }
-  } else {
+  } else if (typeof schema === 'symbol') {
+    const index = context.register(schema);
+    const valueAlias = context.unique('v');
+    const registryAlias = context.unique('r');
+
+    return `
+const ${valueAlias} = ${valuePath};
+const ${registryAlias} = ctx.registry[${index}];
+if (typeof ${valueAlias} !== 'symbol') { throw new ctx.Error(typeof ${valueAlias}, 'symbol', '${path}', 'type of'); }
+if (${valueAlias} !== ${registryAlias}) { throw new ctx.Error(${valueAlias}.toString(), ${registryAlias}.toString(), '${path}', 'symbol'); }
+    `;
+  } else if (schema === null || schema === undefined) {
     const valueAlias = context.unique('v');
     return `
 const ${valueAlias} = ${valuePath};
-if (${valueAlias} !== ${schema}) { throw new ctx.Error(${valueAlias}, ${schema}, \`${path}\`); }
+if (${valueAlias} !== null && ${valueAlias} !== undefined ) { throw new ctx.Error(${valueAlias}, 'nullable', '${path}'); }
+    `;
+  } else {
+    const valueAlias = context.unique('v');
+    const typeAlias = context.unique('t');
+    const value = context.unique('val');
+    return `
+const ${valueAlias} = ${valuePath};
+const ${typeAlias} = '${typeof schema}';
+const ${value} = ${JSON.stringify(schema)};
+if (typeof ${valueAlias} !== ${typeAlias}) { throw new ctx.Error(typeof ${valueAlias}, ${typeAlias}, '${path}', 'type of'); }
+if (${valueAlias} !== ${value}) { throw new ctx.Error(${valueAlias}, ${value}, '${path}'); }
 `;
   }
+};
+
+const flatAggregateError = (error: AggregateError): AssertError[] => {
+  return error.errors.flatMap((e) => (e instanceof AggregateError ? flatAggregateError(e) : e));
 };
 
 export const compile = <S>(schema: S, rootName: string, options: CompilerOptions = {}) => {
   const context = new Context(options);
   const code = codeGen(schema, context, 'data', rootName);
   const validator = new Function('ctx', 'data', code);
-  return (data: SchemaData<S>) => validator(context, data);
+  return (data: SchemaData<S>) => {
+    try {
+      validator(context, data);
+    } catch (e) {
+      const errors = e instanceof AggregateError ? flatAggregateError(e) : [e];
+      throw new AggregateError(errors, 'Validation failure');
+    }
+  };
 };
 
-const findFirstError = <T>(array: T[], map: (value: T, index: number) => AssertError | false | null | void | undefined): false | AssertError => {
-  for (let i = 0; i < array.length; i++) {
-    const error = map(array[i], i);
-    if (error) {
-      return error;
-    }
-  }
-  return false;
-};
-
-const findNotError = <T>(array: T[], map: (value: T, index: number) => AssertError | false | null | void | undefined): false | AssertError => {
-  const errors: AssertError[] = [];
-  for (let i = 0; i < array.length; i++) {
-    const error = map(array[i], i);
-    if (!error) {
-      return false;
-    } else {
-      errors.push(error);
-    }
-  }
-  return errors.reduce((result, error) => {
-    return new AssertError(result.value, [result.expected, error.expected].join(' or '), result.path, result.subject);
-  });
-};
-
-const assert = (target: unknown, schema: unknown, path: string, optional = false): AssertError | false | void => {
-  if (schema === null || typeof schema === 'undefined') {
-    return new AssertError(schema, 'any value', path, 'schema value');
-  }
-  if (schema instanceof Optional) {
-    return assert(target, schema.schemas[0], path, true);
-  }
-  const isValue = target !== null && typeof target !== 'undefined';
-  if (!isValue && optional) {
-    return;
-  }
-  if (schema instanceof Or) {
-    if (!schema.schemas.length) {
-      return new AssertError(target, 'values', path, 'OR schema');
-    }
-    return findNotError(schema.schemas, (schema) => assert(target, schema, path));
-  }
+const assert = (target: unknown, schema: unknown, path: string): AssertError[] => {
   if (schema instanceof And) {
-    if (!schema.schemas.length) {
-      return new AssertError(target, 'values', path, 'AND schema');
+    return schema.schemas.flatMap((schema) => assert(target, schema, path)).filter((error) => !!error);
+  } else if (schema instanceof Or) {
+    const errors = schema.schemas.flatMap((schema) => assert(target, schema, path));
+    const filteredErrors = errors.filter((error) => !!error);
+    if (filteredErrors.length === schema.schemas.length) {
+      return filteredErrors;
     }
-    return findFirstError(schema.schemas, (schema) => assert(target, schema, path));
-  }
-
-  if (typeof schema === 'function') {
-    if (!isValue) {
-      return new AssertError(target, schema.name, path);
+  } else if (schema instanceof Optional) {
+    if (target !== undefined && target !== null) {
+      return assert(target, schema.schemas[0], path);
+    }
+  } else if (schema instanceof Tuple) {
+    if (!Array.isArray(target)) {
+      return [new AssertError(target, 'array', path)];
+    }
+    return schema.schemas.flatMap((s, idx) => assert(target[idx], s, `${path}[${idx}]`)).filter((error) => !!error);
+  } else if (typeof schema === 'function') {
+    if (target === null || target === undefined) {
+      return [new AssertError(target, 'a non-nullable', path)];
     }
     if (typeof target === 'object' && !(target instanceof schema)) {
-      return new AssertError(target, schema.name, path);
+      return [new AssertError(target?.constructor?.name, `instance of ${schema.name}`, path, 'instance of')];
     }
-    if (typeof target !== 'object' && target.constructor !== schema) {
-      return new AssertError(target, schema.name, path);
+    if (typeof target !== 'object' && target?.constructor !== schema) {
+      return [new AssertError(target?.constructor?.name, schema.name, path, 'type')];
     }
   } else if (Array.isArray(schema)) {
     if (!Array.isArray(target)) {
-      return new AssertError(target, schema.constructor.name, path);
+      return [new AssertError(target, 'array', path)];
     }
-    return findFirstError(target, (value, idx) => {
-      return findNotError(schema, (itemSchemaType) => assert(value, itemSchemaType, `${path}.${idx}`));
-    });
-  } else if (typeof schema === 'object') {
+    return schema.flatMap((s) => target.flatMap((value, idx) => assert(value, s, `${path}[${idx}]`))).filter((error) => !!error);
+  } else if (typeof schema === 'object' && schema !== null) {
     if (schema instanceof RegExp) {
       if (!schema.test('' + target)) {
-        return new AssertError(target, `matching /${schema.source}/`, path);
+        return [new AssertError(target, `matching ${schema.toString()}`, path)];
       }
+      return [];
     } else {
-      if (typeof target !== 'object') {
-        return new AssertError(target, schema.constructor.name, path);
+      if (target === null || target === undefined) {
+        return [new AssertError(target, 'object', path)];
       }
-      if (target === null) {
-        return new AssertError(target, 'an object', path);
+      if (typeof target !== 'object') {
+        return [new AssertError(target, schema.constructor.name, path)];
       }
       if ($keys in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, (targetKey) => assert(targetKey, schema[$keys], `${path}.${targetKey}`));
-        if (assertError) {
-          return assertError;
-        }
+        return targetKeys.flatMap((key) => assert(key, schema[$keys], path)).filter((error) => !!error);
       }
       if ($values in schema) {
         const targetKeys = Object.keys(target);
-        const assertError = findFirstError(targetKeys, (targetKey) =>
-          assert(target[targetKey as keyof typeof target], schema[$values], `${path}.${targetKey}`),
-        );
-        if (assertError) {
-          return assertError;
-        }
+        return targetKeys.flatMap((key) => assert(target[key as keyof typeof target], schema[$values], path)).filter((error) => !!error);
       }
-      return findFirstError(Object.keys(schema), (key) => assert(target[key as keyof typeof target], schema[key as keyof typeof target], `${path}.${key}`));
+      return Object.keys(schema)
+        .flatMap((key) => assert(target[key as keyof typeof target], schema[key as keyof typeof target], path))
+        .filter((error) => !!error);
+    }
+  } else if (schema === null || schema === undefined) {
+    if (target !== null && target !== undefined) {
+      return [new AssertError(target, 'nullable', path)];
     }
   } else if (target !== schema) {
-    return new AssertError(target, schema, path);
+    return [new AssertError(target, schema, path)];
   }
+  return [];
 };
 
 export const ascertain = <T extends Data = DataValue>(schema: Schema<T>, data: T, rootName = '[root]') => {
-  const result = assert(data, schema, rootName);
-  if (result instanceof AssertError) {
-    throw new TypeError(result.toString());
+  const result = assert(data, schema, rootName).filter((error) => !!error);
+  if (result.length > 0) {
+    throw new AggregateError(result, 'Validation failure');
   }
 };
