@@ -1,4 +1,5 @@
-import { ascertain, compile, optional, and, or, tuple, $keys, $values, as, Schema, SchemaData, AssertError } from '../index';
+import { strict } from 'assert';
+import { ascertain, compile, optional, and, or, tuple, $keys, $values, $strict, as, Schema } from '../index';
 
 const fixture = {
   a: 1,
@@ -13,29 +14,16 @@ const fixture = {
   j: Symbol('test'),
 };
 
+const validate = (schema: unknown, data: any) => {
+  const compiled = compile(schema, '[DATA]');
+  compiled(data);
+}
+
 describe('Ascertain test suite', () => {
-  it('Should export AssertError class', () => {
-    expect(AssertError).toBeDefined();
-  });
   it('Should throw error if no arguments for Operation', () => {
     expect(() => and()).toThrow();
   });
-  describe.each([
-    {
-      title: 'compiled',
-      validate: (schema: unknown, data: any) => {
-        const compiled = compile(schema, '[DATA]');
-        compiled(data as SchemaData<typeof schema>);
-      },
-    },
-    {
-      title: 'runtime',
-      validate: (schema: unknown, data: any) => {
-        ascertain(schema, data, '[DATA]');
-      },
-    },
-  ])('for $title schema', ({ validate }) => {
-
+  describe('for compiled schema', () => {
     it.each([
       ['Number', { a: Number }, fixture],
       ['String', { b: String }, fixture],
@@ -57,7 +45,8 @@ describe('Ascertain test suite', () => {
       ['Optional exists', { c: optional(true) }, fixture],
       ['Optional does not exist', { z: optional(true) }, fixture],
       ['Optional complex does not exist', { z: optional(or(true, false)) }, fixture],
-      ['And', { h: and(Date, { toJSON: Function }) }, fixture],
+      ['And', { h: and(Date, { toString: Function }) }, fixture],
+      ['And', { d: and([], { length: 5 }) }, fixture],
       ['Or', { c: or(true, false) }, fixture],
       ['Tuple', { d: tuple(1, 2, 3, 4, 5) }, fixture],
       ['Keys', { e: { [$keys]: /^\w+$/ } }, fixture],
@@ -67,46 +56,44 @@ describe('Ascertain test suite', () => {
     });
 
     it.each([
-      ['Number', { c: Number }, fixture, 'expected Number'],
-      ['String', { a: String }, fixture, 'expected String'],
-      ['Boolean', { b: Boolean }, fixture, 'expected Boolean'],
-      ['Function', { a: Function }, fixture, 'expected Function'],
-      ['Array', { e: Array }, fixture, 'expected instance of Array'],
-      ['[]', { e: [] }, fixture, 'expected array'],
-      ['[String]', { d: [String] }, fixture, 'expected String', fixture.d.length],
-      ['[Boolean, String]', { d: [Boolean, String] }, fixture, /expected (Boolean|String)/, fixture.d.length * 2],
-      ['Object', { c: Object }, fixture, 'expected Object'],
+      ['Number', { c: Number }, fixture, 'expected type Number'],
+      ['String', { a: String }, fixture, 'expected type String'],
+      ['Boolean', { b: Boolean }, fixture, 'expected type Boolean'],
+      ['Function', { a: Function }, fixture, 'expected type Function'],
+      ['Array', { e: Array }, fixture, 'expected an instance of Array'],
+      ['[]', { e: [] }, fixture, 'expected an instance of Array'],
+      ['[String]', { d: [String] }, fixture, 'expected type String'],
+      ['[Boolean, String]', { d: [Boolean, String] }, fixture, /expected type (Boolean|String)/],
+      ['Object', { c: Object }, fixture, 'expected type Object'],
       ['Object properties', { e: { d: Number } }, fixture, 'non-nullable'],
-      ['{}', { i: {} }, fixture, 'expected object'],
-      ['RegExp', { b: /^testing$/ }, fixture, 'matching'],
-      ['RegExp undefined', { z: /^testing$/ }, fixture, 'matching'],
+      ['{}', { i: {} }, fixture, 'expected non-nullable'],
+      ['RegExp', { b: /^testing$/ }, fixture, 'expected to match'],
+      ['RegExp undefined', { z: /^testing$/ }, fixture, 'expected to match'],
       ['Value', { c: false }, fixture, 'false'],
       ['Null', { a: null }, fixture, 'expected nullable'],
       ['Undefined', { a: undefined }, fixture, 'expected nullable'],
       ['Optional exists', { c: optional(false) }, fixture, 'expected false'],
-      ['And', { c: and(true, false, null) }, fixture, /expected (false|nullable)/, 2],
-      ['Or', { c: or(String, Number) }, fixture, /expected (String|Number)/, 2],
-      ['Tuple', { a: tuple(1) }, fixture, 'expected array'],
-      ['Keys', { e: { [$keys]: Number } }, fixture, 'expected Number'],
-      ['Values', { e: { [$values]: String } }, fixture, 'expected String'],
-      ['Array schema', [Number], {}, 'expected array'],
-      ['Array enum schema', [Number, String], [1, '3', false], /expected (Number|String)/, 6 - 2],
-      ['Non object target', {}, 2, 'expected Object'],
-    ])('Should validate schema type %s negative', (_, schema, target: any, message, size = 1) => {
+      ['And', { c: and(true, false, null) }, fixture, /expected (false|nullable)/],
+      ['Or', { c: or(String, Number) }, fixture, /expected type (String|Number)/],
+      ['Tuple', { a: tuple(1) }, fixture, 'expected an instance of Array'],
+      ['Keys', { e: { [$keys]: Number } }, fixture, 'expected type Number'],
+      ['Values', { e: { [$values]: String } }, fixture, 'expected type String'],
+      ['Values', { e: { [$strict]: true } }, fixture, 'not allowed'],
+      ['Array schema', [Number], {}, 'expected an instance of Array'],
+      ['Array enum schema', [Number, String], [1, '3', false], /expected type (Number|String)/],
+      ['Non object target', {}, 2, 'type is object'],
+    ])('Should validate schema type %s negative', (_, schema, target: any, message) => {
       try {
         validate(schema, target);
         expect(false).toBe(true);
       } catch (error) {
-        expect(error.errors).toHaveLength(size);
-        for (const e of error.errors) {
-          expect(e.message).toMatch(message);
-        }
+        expect(error.message).toMatch(message);
       }
     });
 
     it('Should validate README example', () => {
       expect(() => {
-        validate(
+        ascertain(
           {
             number: Number,
             string: String,
@@ -119,7 +106,7 @@ describe('Ascertain test suite', () => {
             oneOfValue: or(1, 2, 3),
             arrayOfNumbers: [Number],
             objectSchema: {
-              number: Number,
+
             },
             optional: optional({
               number: Number,
@@ -127,6 +114,9 @@ describe('Ascertain test suite', () => {
             keyValue: {
               [$keys]: /^key[A-Z]/,
               [$values]: Number
+            },
+            strict: {
+              [$strict]: true,
             },
             parsedNumber: Number,
             parsedString: String,
@@ -137,6 +127,7 @@ describe('Ascertain test suite', () => {
             },
             parsedBase64: String,
             parsedTime: 2 * 60 * 1000, // two minutes
+            parsedRawTime: 2,
             parsedDate: Date,
           },
           {
@@ -159,6 +150,7 @@ describe('Ascertain test suite', () => {
               keyTwo: 2,
               keyThree: 3,
             },
+            strict: {},
             parsedNumber: as.number('1'),
             parsedString: as.string('string'),
             parsedBoolean: as.boolean('false'),
@@ -166,6 +158,7 @@ describe('Ascertain test suite', () => {
             parsedJSON: as.json('{ "number": 1 }'),
             parsedBase64: as.base64('dGVzdA=='),
             parsedTime: as.time('2m'),
+            parsedRawTime: as.time('2'),
             parsedDate: as.date('2024-12-31'),
           });
       }).not.toThrow();
