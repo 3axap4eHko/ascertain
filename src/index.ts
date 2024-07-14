@@ -45,40 +45,40 @@ const MULTIPLIERS = {
 };
 
 export const as = {
-  string: (value: string | undefined) => {
-    return typeof value === 'string' ? value : undefined;
+  string: (value: string | undefined): string => {
+    return typeof value === 'string' ? value : (undefined as unknown as string);
   },
-  number: (value: string | undefined) => {
+  number: (value: string | undefined): number => {
     const result = parseFloat(value as string);
-    return Number.isFinite(result) ? result : undefined;
+    return Number.isFinite(result) ? result : (undefined as unknown as number);
   },
-  date: (value: string | undefined) => {
+  date: (value: string | undefined): Date => {
     const result = Date.parse(value as string);
-    return Number.isFinite(result) ? new Date(result) : undefined;
+    return Number.isFinite(result) ? new Date(result) : (undefined as unknown as Date);
   },
-  time: (value: string | undefined) => {
+  time: (value: string | undefined): number => {
     const matches = value?.match(/^(\d+)(ms|s|m|h|d|w)?$/);
     if (matches) {
       const [, amount, unit = 'ms'] = matches;
       return parseInt(amount, 10) * MULTIPLIERS[unit as keyof typeof MULTIPLIERS];
     }
-    return undefined;
+    return undefined as unknown as number;
   },
-  boolean: (value: string | undefined) =>
-    /^(0|1|true|false|enabled|disabled)$/i.test(value as string) ? /^(1|true|enabled)$/i.test(value as string) : undefined,
-  array: (value: string | undefined, delimiter: string) => value?.split?.(delimiter) ?? undefined,
-  json: (value: string | undefined) => {
+  boolean: (value: string | undefined): boolean =>
+    /^(0|1|true|false|enabled|disabled)$/i.test(value as string) ? /^(1|true|enabled)$/i.test(value as string) : (undefined as unknown as boolean),
+  array: (value: string | undefined, delimiter: string): string[] => value?.split?.(delimiter) ?? (undefined as unknown as string[]),
+  json: <T = object>(value: string | undefined): T => {
     try {
       return JSON.parse(value as string);
     } catch (e) {
-      return undefined;
+      return undefined as unknown as T;
     }
   },
-  base64: (value: string | undefined) => {
+  base64: (value: string | undefined): string => {
     try {
       return fromBase64(value as string);
     } catch (e) {
-      return undefined;
+      return undefined as unknown as string;
     }
   },
 };
