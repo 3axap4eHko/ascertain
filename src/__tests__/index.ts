@@ -34,6 +34,7 @@ describe('Ascertain test suite', () => {
       ['[Number]', { d: [Number] }, fixture],
       ['Object', { e: Object }, fixture],
       ['{}', { e: {} }, fixture],
+      ['Error', { error: Error }, { error: new Error() }],
       ['Object properties', { e: { f: Number } }, fixture],
       ['RegExp', { b: /^string$/ }, fixture],
       ['1', { a: 1 }, fixture],
@@ -57,8 +58,12 @@ describe('Ascertain test suite', () => {
 
     it.each([
       ['Number', { c: Number }, fixture, 'expected type Number'],
+      ['Number', { c: Number }, { c: NaN }, 'expected a valid Number'],
+      ['Number', { c: Number }, { c: as.number('test') }, 'expected a valid number'],
       ['String', { a: String }, fixture, 'expected type String'],
       ['Boolean', { b: Boolean }, fixture, 'expected type Boolean'],
+      ['Date', { d: Date }, { d: new Date('nothing') }, 'expected a valid Date'],
+      ['Error', { value: 'test' }, { value: new Error('Invalid test') }, 'Invalid test for path'],
       ['Function', { a: Function }, fixture, 'expected type Function'],
       ['Array', { e: Array }, fixture, 'expected an instance of Array'],
       ['[]', { e: [] }, fixture, 'expected an instance of Array'],
@@ -68,7 +73,7 @@ describe('Ascertain test suite', () => {
       ['Object properties', { e: { d: Number } }, fixture, 'non-nullable'],
       ['{}', { i: {} }, fixture, 'expected non-nullable'],
       ['RegExp', { b: /^testing$/ }, fixture, 'expected to match'],
-      ['RegExp undefined', { z: /^testing$/ }, fixture, 'expected to match'],
+      ['RegExp undefined', { z: /^testing$/ }, fixture, 'expected non-nullable'],
       ['Value', { c: false }, fixture, 'false'],
       ['Null', { a: null }, fixture, 'expected nullable'],
       ['Undefined', { a: undefined }, fixture, 'expected nullable'],
@@ -81,14 +86,9 @@ describe('Ascertain test suite', () => {
       ['Values', { e: { [$strict]: true } }, fixture, 'not allowed'],
       ['Array schema', [Number], {}, 'expected an instance of Array'],
       ['Array enum schema', [Number, String], [1, '3', false], /expected type (Number|String)/],
-      ['Non object target', {}, 2, 'type is object'],
+      ['Non object target', {}, 2, 'expected an instance of Object'],
     ])('Should validate schema type %s negative', (_, schema, target: any, message) => {
-      try {
-        validate(schema, target);
-        expect(false).toBe(true);
-      } catch (error) {
-        expect(error.message).toMatch(message);
-      }
+      expect(() => validate(schema, target)).toThrow(message);
     });
 
     it('Should validate README example', () => {
@@ -173,7 +173,7 @@ describe('Ascertain test suite', () => {
       ['time', as.time, '1m', 60 * 1000],
       ['boolean true', as.boolean, '1', true],
       ['boolean false', as.boolean, '0', false],
-      ['array', (v: string) => as.array(v, ','), '1,2,3', ['1','2','3']],
+      ['array', (v: string) => as.array(v, ','), '1,2,3', ['1', '2', '3']],
       ['json', as.json, 'null', null],
       ['base64', as.base64, Buffer.from('test').toString('base64'), 'test'],
     ])('Should convert to %s', (_, convert, value, expected) => {

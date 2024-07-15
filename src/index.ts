@@ -44,17 +44,20 @@ const MULTIPLIERS = {
   w: 604800000,
 };
 
+export const asError = <T>(message: string) => new TypeError(message) as unknown as T;
+
 export const as = {
   string: (value: string | undefined): string => {
-    return typeof value === 'string' ? value : (undefined as unknown as string);
+    return typeof value === 'string' ? value : asError(`Invalid value "${value}", expected a string`);
   },
   number: (value: string | undefined): number => {
     const result = parseFloat(value as string);
-    return Number.isFinite(result) ? result : (undefined as unknown as number);
+    return Number.isNaN(result) ? asError(`Invalid value ${value}, expected a valid number`) : result;
   },
   date: (value: string | undefined): Date => {
     const result = Date.parse(value as string);
-    return Number.isFinite(result) ? new Date(result) : (undefined as unknown as Date);
+    const date = new Date(result);
+    return Number.isNaN(date.valueOf()) ? asError(`Invalid value "${value}", expected a valid date format`) : date;
   },
   time: (value: string | undefined): number => {
     const matches = value?.match(/^(\d+)(ms|s|m|h|d|w)?$/);
@@ -62,23 +65,25 @@ export const as = {
       const [, amount, unit = 'ms'] = matches;
       return parseInt(amount, 10) * MULTIPLIERS[unit as keyof typeof MULTIPLIERS];
     }
-    return undefined as unknown as number;
+    return asError(`Invalid value ${value}, expected a valid time format`);
   },
   boolean: (value: string | undefined): boolean =>
-    /^(0|1|true|false|enabled|disabled)$/i.test(value as string) ? /^(1|true|enabled)$/i.test(value as string) : (undefined as unknown as boolean),
-  array: (value: string | undefined, delimiter: string): string[] => value?.split?.(delimiter) ?? (undefined as unknown as string[]),
+    /^(0|1|true|false|enabled|disabled)$/i.test(value as string)
+      ? /^(1|true|enabled)$/i.test(value as string)
+      : asError(`Invalid value ${value}, expected a boolean like`),
+  array: (value: string | undefined, delimiter: string): string[] => value?.split?.(delimiter) ?? asError(`Invalid value ${value}, expected an array`),
   json: <T = object>(value: string | undefined): T => {
     try {
       return JSON.parse(value as string);
     } catch (e) {
-      return undefined as unknown as T;
+      return asError(`Invalid value ${value}, expected a valid JSON string`);
     }
   },
   base64: (value: string | undefined): string => {
     try {
       return fromBase64(value as string);
     } catch (e) {
-      return undefined as unknown as string;
+      return asError(`Invalid value ${value}, expected a valid base64 string`);
     }
   },
 };
@@ -106,6 +111,17 @@ class Context {
   }
 }
 
+const codeGenCollectErrors = (errorsAlias: string, code: string, extra: string = '') => `try {${code}} catch (e) {${errorsAlias}.push(e.message);${extra}}`;
+const codeGenExpectNoErrors = (errorsAlias: string) => `if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }`;
+const codeGenExpectNonError = (valueAlias: string, path: string) =>
+  `if (${valueAlias} instanceof Error) { throw new TypeError(\`\${${valueAlias}.message} for path "${path}".\`); }`;
+const codeGenExpectNonNullable = (valueAlias: string, path: string) =>
+  `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }`;
+const codeGenExpectObject = (valueAlias: string, path: string, instanceOf: string) =>
+  `if (typeof ${valueAlias} !== 'object') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected an instance of ${instanceOf}\`); }`;
+const codeGenExpectArray = (valueAlias: string, path: string) =>
+  `if (!Array.isArray(${valueAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}.constructor?.name} for path "${path}", expected an instance of Array.\`); }`;
+
 const codeGen = <T>(schema: Schema<T>, context: Context, valuePath: string, path: string): string => {
   if (schema instanceof And) {
     const valueAlias = context.unique('v');
@@ -115,14 +131,14 @@ const codeGen = <T>(schema: Schema<T>, context: Context, valuePath: string, path
   const ${errorsAlias} = [];
   const ${valueAlias} = ${valuePath};
   ${code}
-  if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }
+  ${codeGenExpectNoErrors(errorsAlias)}
 `;
   } else if (schema instanceof Or) {
     const valueAlias = context.unique('v');
     const errorsAlias = context.unique('err');
     const code = schema.schemas
       .map((s) => codeGen(s, context, valueAlias, path))
-      .reduceRight((result, code) => `try {${code}} catch (e) {${errorsAlias}.push(e.message);${result}}`, `throw new TypeError(${errorsAlias}.join('\\n'));`);
+      .reduceRight((result, code) => codeGenCollectErrors(errorsAlias, code, result), codeGenExpectNoErrors(errorsAlias));
     return `// Or
 const ${errorsAlias} = [];
 const ${valueAlias} = ${valuePath};
@@ -141,34 +157,41 @@ if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.sc
       '// Tuple',
       `const ${valueAlias} = ${valuePath};`,
       `const ${errorsAlias} = [];`,
-      `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }`,
-      `if (typeof ${valueAlias} !== 'object') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected an instance of Array\`); }`,
-      `if (!Array.isArray(${valueAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}.constructor?.name} for path "${path}", expected an instance of Array.\`); }`,
+      codeGenExpectNonNullable(valueAlias, path),
+      codeGenExpectObject(valueAlias, path, 'Array'),
+      codeGenExpectArray(valueAlias, path),
       `if (${valueAlias}.length > ${schema.schemas.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.schemas.length}.\`); }`,
-      ...schema.schemas.map(
-        (s, idx) => `try { ${codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`)} } catch (e) { ${errorsAlias}.push(e.message); }`,
-      ),
-      `if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }`,
+      ...schema.schemas.map((s, idx) => codeGenCollectErrors(errorsAlias, codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`))),
+      codeGenExpectNoErrors(errorsAlias),
     ];
     return code.join('\n');
   } else if (typeof schema === 'function') {
     const index = context.register(schema);
     const valueAlias = context.unique('v');
     const registryAlias = context.unique('r');
-    return `
-const ${valueAlias} = ${valuePath};
-const ${registryAlias} = ctx.registry[${index}];
-if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }
-if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}?.constructor?.name} for path "${path}", expected an instance of ${schema?.name}\`); }
-if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new TypeError(\`Invalid type \${${valueAlias}?.constructor?.name} for path "${path}", expected type ${schema?.name}\`); }
-`;
+    const code: string[] = [
+      `const ${valueAlias} = ${valuePath};`,
+      `const ${registryAlias} = ctx.registry[${index}];`,
+      codeGenExpectNonNullable(valueAlias, path),
+    ];
+    if ((schema as unknown) !== Error && !(schema?.prototype instanceof Error)) {
+      code.push(codeGenExpectNonError(valueAlias, path));
+    }
+
+    code.push(
+      `if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}?.constructor?.name} for path "${path}", expected an instance of ${schema?.name}\`); }`,
+      `if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new TypeError(\`Invalid type \${${valueAlias}?.constructor?.name} for path "${path}", expected type ${schema?.name}\`); }`,
+      `if (Number.isNaN(${valueAlias}?.valueOf?.())) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
+    );
+    return code.join('\n');
   } else if (Array.isArray(schema)) {
     const valueAlias = context.unique('v');
     const code: string[] = [
       `const ${valueAlias} = ${valuePath};`,
-      `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }`,
-      `if (typeof ${valueAlias} !== 'object') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected an instance of Array.\`); }`,
-      `if (!Array.isArray(${valueAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}.constructor?.name} for path "${path}", expected an instance of Array.\`); }`,
+      codeGenExpectNonNullable(valueAlias, path),
+      codeGenExpectNonError(valueAlias, path),
+      codeGenExpectObject(valueAlias, path, 'Array'),
+      codeGenExpectArray(valueAlias, path),
     ];
     if (schema.length > 0) {
       const value = context.unique('val');
@@ -177,12 +200,11 @@ if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${regist
       code.push(`const ${errorsAlias} = [];`);
       code.push(
         ...schema.map(
-          (s) =>
-            `${valueAlias}.forEach((${value},${key}) => { try { ${codeGen(s, context, value, `${path}[\${${key}}]`)} } catch(e){ ${errorsAlias}.push(e.message); } });`,
+          (s) => `${valueAlias}.forEach((${value},${key}) => { ${codeGenCollectErrors(errorsAlias, codeGen(s, context, value, `${path}[\${${key}}]`))} });`,
         ),
       );
 
-      code.push(`if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }`);
+      code.push(codeGenExpectNoErrors(errorsAlias));
     }
     return code.join('\n');
   } else if (typeof schema === 'object' && schema !== null) {
@@ -190,14 +212,17 @@ if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${regist
       const valueAlias = context.unique('v');
       return `
 const ${valueAlias} = ${valuePath};
+${codeGenExpectNonNullable(valueAlias, path)}
+${codeGenExpectNonError(valueAlias, path)}
 if (!${schema.toString()}.test('' + ${valueAlias})) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected to match ${schema.toString()}\`); }
 `;
     } else {
       const valueAlias = context.unique('v');
       const code: string[] = [
         `const ${valueAlias} = ${valuePath};`,
-        `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }`,
-        `if (typeof ${valueAlias} !== 'object') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected type is object.\`); }`,
+        codeGenExpectNonNullable(valueAlias, path),
+        codeGenExpectObject(valueAlias, path, 'Object'),
+        codeGenExpectNonError(valueAlias, path),
       ];
       if ($keys in schema) {
         const keysAlias = context.unique('k');
@@ -205,8 +230,9 @@ if (!${schema.toString()}.test('' + ${valueAlias})) { throw new TypeError(\`Inva
         const kAlias = context.unique('k');
         code.push(`
 const ${keysAlias} = Object.keys(${valueAlias});
-const ${errorsAlias} = ${keysAlias}.map(${kAlias} => { try { ${codeGen(schema[$keys], context, kAlias, `${path}[\${${kAlias}}]`)} } catch (e) { return e.message; } }).filter(Boolean);
-if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }
+const ${errorsAlias} = [];
+${keysAlias}.forEach(${kAlias} => { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$keys], context, kAlias, `${path}[\${${kAlias}}]`))} });
+${codeGenExpectNoErrors(errorsAlias)}
 `);
       }
       if ($values in schema) {
@@ -216,8 +242,9 @@ if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n'
         const errorsAlias = context.unique('err');
         code.push(`
 const ${entriesAlias} = Object.entries(${valueAlias});
-const ${errorsAlias} = ${entriesAlias}.map(([${kAlias},${vAlias}]) => { try { ${codeGen(schema[$values], context, vAlias, `${path}[\${${kAlias}}]`)} } catch (e) { return e.message; } }).filter(Boolean);
-if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }
+const ${errorsAlias} = [];
+${entriesAlias}.forEach(([${kAlias},${vAlias}]) => { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$values], context, vAlias, `${path}[\${${kAlias}}]`))} });
+${codeGenExpectNoErrors(errorsAlias)}
 `);
       }
       if ($strict in schema && schema[$strict]) {
@@ -254,6 +281,7 @@ if (${valueAlias} !== null && ${valueAlias} !== undefined ) { throw new TypeErro
     return `
 const ${valueAlias} = ${valuePath};
 const ${value} = ${JSON.stringify(schema)};
+${codeGenExpectNonError(valueAlias, path)}
 if (typeof ${valueAlias} !== '${typeof schema}') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected ${typeof schema}\`); }
 if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value ${JSON.stringify(valueAlias)} for path "${path}", expected ${JSON.stringify(schema)}\`); }
 `;
