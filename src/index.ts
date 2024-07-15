@@ -59,11 +59,11 @@ export const as = {
     const date = new Date(result);
     return Number.isNaN(date.valueOf()) ? asError(`Invalid value "${value}", expected a valid date format`) : date;
   },
-  time: (value: string | undefined): number => {
-    const matches = value?.match(/^(\d+)(ms|s|m|h|d|w)?$/);
+  time: (value: string | undefined, conversionFactor = 1): number => {
+    const matches = value?.match(/^(\d*\.?\d*)(ms|s|m|h|d|w)?$/);
     if (matches) {
       const [, amount, unit = 'ms'] = matches;
-      return parseInt(amount, 10) * MULTIPLIERS[unit as keyof typeof MULTIPLIERS];
+      return parseInt(`${(parseFloat(amount) * MULTIPLIERS[unit as keyof typeof MULTIPLIERS]) / conversionFactor}`);
     }
     return asError(`Invalid value ${value}, expected a valid time format`);
   },
