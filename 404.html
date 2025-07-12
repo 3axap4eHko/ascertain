@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="generator" content="VuePress 2.0.0-rc.24" />
+    <style>
+      :root {
+        --vp-c-bg: #fff;
+      }
+
+      [data-theme='dark'] {
+        --vp-c-bg: #1b1b1f;
+      }
+
+      html,
+      body {
+        background-color: var(--vp-c-bg);
+      }
+    </style>
+    <script>
+      const useChoice = localStorage.getItem('vuepress-color-scheme')
+      const systemStatus =
+        'matchMedia' in window
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          : false
+
+      if (useChoice === 'light') {
+        document.documentElement.dataset.theme = 'light'
+      } else if (useChoice === 'dark' || systemStatus) {
+        document.documentElement.dataset.theme = 'dark'
+      }
+    </script>
+    <title>Ascertain</title><meta name="description" content="0-Deps, simple, blazing fast, for browser and Node.js object schema validator">
+    <link rel="preload" href="/ascertain/assets/style-Cy7QDzew.css" as="style"><link rel="stylesheet" href="/ascertain/assets/style-Cy7QDzew.css">
+    <link rel="modulepreload" href="/ascertain/assets/app-C1EuwAoh.js"><link rel="modulepreload" href="/ascertain/assets/404.html-CcwKwMu4.js">
+    <link rel="prefetch" href="/ascertain/assets/index.html-PHxnR7_z.js" as="script">
+  </head>
+  <body>
+    <div id="app"><!--[--><div class="vp-theme-container" vp-container data-v-2047ca9c><main class="page" data-v-2047ca9c><div vp-content data-v-2047ca9c><h1 data-v-2047ca9c>404</h1><blockquote data-v-2047ca9c>There&#39;s nothing here.</blockquote><a class="route-link" href="/ascertain/" data-v-2047ca9c>Take me home</a></div></main></div><!--[--><!----><!--]--><!--]--></div>
+    <script type="module" src="/ascertain/assets/app-C1EuwAoh.js" defer></script>
+  </body>
+</html>
