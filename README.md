@@ -10,6 +10,9 @@
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
 
+
+[Documentation](https://3axap4ehko.github.io/ascertain/)
+
 ## Features
 
 - Type-safe validation: Ensures your data conforms to predefined schemas.
@@ -24,6 +27,8 @@
  - Array Values: Arrays are used to represent an expected array type, where every item in the array must match the specified type (acting as an "and" operator).
  - Regular Expressions: Regular expressions are used to validate that a value matches a specified string pattern.
  - Object Types: Non-null objects are used as templates for expected properties, where each property of the object must match the corresponding schema definition.
+
+
 
 ## Usage Example
 
