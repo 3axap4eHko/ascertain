@@ -1,4 +1,3 @@
-import { strict } from 'assert';
 import { ascertain, compile, optional, and, or, tuple, $keys, $values, $strict, as, Schema } from '../index';
 
 const fixture = {
@@ -7,7 +6,7 @@ const fixture = {
   c: true,
   d: [1, 2, 3, 4, 5],
   e: { f: 1 },
-  f() { },
+  f() {},
   g: null,
   h: new Date(),
   i: undefined,
@@ -17,7 +16,7 @@ const fixture = {
 const validate = (schema: unknown, data: any) => {
   const compiled = compile(schema, '[DATA]');
   compiled(data);
-}
+};
 
 describe('Ascertain test suite', () => {
   it('Should throw error if no arguments for Operation', () => {
@@ -80,6 +79,7 @@ describe('Ascertain test suite', () => {
       ['Optional exists', { c: optional(false) }, fixture, 'expected false'],
       ['And', { c: and(true, false, null) }, fixture, /expected (false|nullable)/],
       ['Or', { c: or(String, Number) }, fixture, /expected type (String|Number)/],
+      ['Or', or({ e: { f: 2 } }, { g: Array }), fixture, /expected/],
       ['Tuple', { a: tuple(1) }, fixture, 'expected an instance of Array'],
       ['Keys', { e: { [$keys]: Number } }, fixture, 'expected type Number'],
       ['Values', { e: { [$values]: String } }, fixture, 'expected type String'],
@@ -105,15 +105,13 @@ describe('Ascertain test suite', () => {
             regexp: /regexp/,
             oneOfValue: or(1, 2, 3),
             arrayOfNumbers: [Number],
-            objectSchema: {
-
-            },
+            objectSchema: {},
             optional: optional({
               number: Number,
             }),
             keyValue: {
               [$keys]: /^key[A-Z]/,
-              [$values]: Number
+              [$values]: Number,
             },
             strict: {
               [$strict]: true,
@@ -137,7 +135,7 @@ describe('Ascertain test suite', () => {
             function: Function,
             array: [],
             object: {},
-            date: new Date,
+            date: new Date(),
             regexp: 'regexp',
             oneOfValue: 1,
             arrayOfNumbers: [1, 2, 3, 4, 5],
@@ -160,7 +158,8 @@ describe('Ascertain test suite', () => {
             parsedTime: as.time('2m'),
             parsedRawTime: as.time('2'),
             parsedDate: as.date('2024-12-31'),
-          });
+          },
+        );
       }).not.toThrow();
     });
   });
@@ -178,7 +177,7 @@ describe('Ascertain test suite', () => {
       ['base64', as.base64, Buffer.from('test').toString('base64'), 'test'],
     ])('Should convert to %s', (_, convert, value, expected) => {
       expect(convert(value)).toEqual(expected);
-    })
+    });
     it.each([
       ['string', as.string, undefined],
       ['number', as.number, undefined],
@@ -191,6 +190,40 @@ describe('Ascertain test suite', () => {
       ['base64', as.base64, undefined],
     ])('Should not throw an error during conversion to %s', (_, convert, value) => {
       expect(() => convert(value!)).not.toThrow();
-    })
+    });
+  });
+
+  describe('for complex schema', () => {
+    it('should return proper error', () => {
+      const schema = and(
+        {
+          server: {
+            type: String,
+          },
+        },
+        or(
+          {
+            server: {
+              type: 'a',
+            },
+          },
+          {
+            server: {
+              type: 'b',
+            },
+            hosts: [Number],
+          },
+        ),
+      );
+
+      expect(() => {
+        validate(schema, {
+          server: {
+            type: 'b',
+          },
+          hosts: ['a'],
+        });
+      }).toThrow('[DATA].hosts[0]');
+    });
   });
 });

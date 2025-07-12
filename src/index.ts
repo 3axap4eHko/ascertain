@@ -1,3 +1,12 @@
+/**
+ * Abstract base class for schema operators.
+ *
+ * Provides a common constructor that enforces having at least one schema.
+ *
+ * @template T - The type of data the operator validates.
+ * @abstract
+ * @internal
+ */
 abstract class Operator<T> {
   constructor(public readonly schemas: Schema<T>[]) {
     if (schemas.length === 0) {
@@ -6,10 +15,28 @@ abstract class Operator<T> {
   }
 }
 
+// https://standardschema.dev/
+
+/**
+ * Symbol for validating object keys against a schema.
+ */
 export const $keys = Symbol.for('@@keys');
+/**
+ * Symbol for validating object values against a schema.
+ */
 export const $values = Symbol.for('@@values');
+/**
+ * Symbol for enforcing strict object validation (no extra properties allowed).
+ */
 export const $strict = Symbol.for('@@strict');
 
+/**
+ * Represents a schema for validating data.
+ *
+ * Schemas can be defined for various data types, including objects, arrays, and primitives.
+ *
+ * @template T - The type of data the schema validates.
+ */
 export type Schema<T> =
   T extends Record<string | number | symbol, unknown>
     ? { [K in keyof T]?: Schema<T[K]> | unknown } & { [$keys]?: Schema<keyof T> } & { [$values]?: Schema<T[keyof T]> } & { [$strict]?: boolean }
@@ -18,9 +45,19 @@ export type Schema<T> =
       : unknown;
 
 class Or<T> extends Operator<T> {}
+/**
+ * Operator for validating data against any of the provided schemas (logical OR).
+ *
+ * @template T - The type of data the operator validates.
+ */
 export const or = <T>(...schemas: Schema<T>[]) => new Or(schemas);
 
 class And<T> extends Operator<T> {}
+/**
+ * Operator for validating data against all provided schemas (logical AND).
+ *
+ * @template T - The type of data the operator validates.
+ */
 export const and = <T>(...schemas: Schema<T>[]) => new And(schemas);
 
 class Optional<T> extends Operator<T> {
@@ -28,9 +65,19 @@ class Optional<T> extends Operator<T> {
     super([schema]);
   }
 }
+/**
+ * Operator for making a schema optional (nullable).
+ *
+ * @template T - The type of data the operator validates.
+ */
 export const optional = <T>(schema: Schema<T>) => new Optional(schema);
 
 class Tuple<T> extends Operator<T> {}
+/**
+ * Operator for validating data against a fixed-length tuple of schemas.
+ *
+ * @template T - The type of data the operator validates (a tuple of types).
+ */
 export const tuple = <T>(...schemas: Schema<T>[]) => new Tuple(schemas);
 
 export const fromBase64 = typeof Buffer === 'undefined' ? (value: string) => atob(value) : (value: string) => Buffer.from(value, 'base64').toString('utf-8');
@@ -47,18 +94,43 @@ const MULTIPLIERS = {
 export const asError = <T>(message: string) => new TypeError(message) as unknown as T;
 
 export const as = {
+  /**
+   * Attempts to convert a value to a string.
+   *
+   * @param value - The value to convert.
+   * @returns The value as a string, or a TypeError if not a string.
+   */
   string: (value: string | undefined): string => {
     return typeof value === 'string' ? value : asError(`Invalid value "${value}", expected a string`);
   },
+  /**
+   * Attempts to convert a value to a number.
+   *
+   * @param value - The value to convert (expected to be a string representation of a number).
+   * @returns The value as a number, or a TypeError if not a valid number.
+   */
   number: (value: string | undefined): number => {
     const result = parseFloat(value as string);
     return Number.isNaN(result) ? asError(`Invalid value ${value}, expected a valid number`) : result;
   },
+  /**
+   * Attempts to convert a value to a Date object.
+   *
+   * @param value - The value to convert (expected to be a string representation of a date).
+   * @returns The value as a Date object, or a TypeError if no a valid date.
+   */
   date: (value: string | undefined): Date => {
     const result = Date.parse(value as string);
     const date = new Date(result);
     return Number.isNaN(date.valueOf()) ? asError(`Invalid value "${value}", expected a valid date format`) : date;
   },
+  /**
+   * Attempts to convert a value to a time duration in milliseconds.
+   *
+   * @param value - The value to convert (e.g., "5s" for 5 seconds).
+   * @param conversionFactor - Optional factor to divide the result by (default is 1).
+   * @returns The time duration in milliseconds, or a TypeError if the format is invalid.
+   */
   time: (value: string | undefined, conversionFactor = 1): number => {
     const matches = value?.match(/^(\d*\.?\d*)(ms|s|m|h|d|w)?$/);
     if (matches) {
@@ -67,34 +139,59 @@ export const as = {
     }
     return asError(`Invalid value ${value}, expected a valid time format`);
   },
+  /**
+   * Attempts to convert a value to a boolean.
+   *
+   * @param value - The boolean like value to convert (e.g., "true", "1", "enabled").
+   * @returns The value as a boolean, or a TypeError if it could not be converted to a boolean.
+   */
   boolean: (value: string | undefined): boolean =>
     /^(0|1|true|false|enabled|disabled)$/i.test(value as string)
       ? /^(1|true|enabled)$/i.test(value as string)
       : asError(`Invalid value ${value}, expected a boolean like`),
+  /**
+   * Attempts to convert a string into an array of strings by splitting it using the given delimiter.
+   *
+   * @param value - The string value to attempt to split into an array.
+   * @param delimiter - The character or string used to separate elements in the input string.
+   * @returns An array of strings if the conversion is successful, or a TypeError if the value is not a string.
+   */
   array: (value: string | undefined, delimiter: string): string[] => value?.split?.(delimiter) ?? asError(`Invalid value ${value}, expected an array`),
+  /**
+   * Attempts to parse a JSON string into a JavaScript object.
+   *
+   * @template T - The expected type of the parsed JSON object.
+   * @param value - The JSON string to attempt to parse.
+   * @returns The parsed JSON object if successful, or a TypeError if the value is not valid JSON.
+   */
   json: <T = object>(value: string | undefined): T => {
     try {
       return JSON.parse(value as string);
-    } catch (e) {
+    } catch {
       return asError(`Invalid value ${value}, expected a valid JSON string`);
     }
   },
+  /**
+   * Attempts to decode a base64-encoded string.
+   *
+   * @param value - The base64-encoded string to attempt to decode.
+   * @returns The decoded string if successful, or a TypeError if the value is not valid base64.
+   */
   base64: (value: string | undefined): string => {
     try {
       return fromBase64(value as string);
-    } catch (e) {
+    } catch {
       return asError(`Invalid value ${value}, expected a valid base64 string`);
     }
   },
 };
 
-export interface ErrorFormatter {
-  (value: unknown, expected: unknown, path: string, subject: string): string;
-}
-
-export const formatError: ErrorFormatter = (value, expected, path, subject) =>
-  `Invalid ${subject} ${JSON.stringify(value)} for path ${path}, expected ${expected}.`;
-
+/**
+ * A class representing the context for schema validation.
+ *
+ * Stores a registry of values encountered during validation and provides methods for managing it.
+ * @internal
+ */
 class Context {
   public readonly registry: unknown[] = [];
   private varIndex = 0;
@@ -283,11 +380,22 @@ const ${valueAlias} = ${valuePath};
 const ${value} = ${JSON.stringify(schema)};
 ${codeGenExpectNonError(valueAlias, path)}
 if (typeof ${valueAlias} !== '${typeof schema}') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected ${typeof schema}\`); }
-if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value ${JSON.stringify(valueAlias)} for path "${path}", expected ${JSON.stringify(schema)}\`); }
+if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value \${JSON.stringify(${valueAlias})} for path "${path}", expected ${JSON.stringify(schema)}\`); }
 `;
   }
 };
 
+/**
+ * Compiles a schema into a validation function.
+ *
+ * This function takes a schema definition and generates a JavaScript function
+ * that can be used to validate data against the schema.
+ *
+ * @template T - The type of data the schema validates.
+ * @param schema - The schema to compile.
+ * @param rootName - A name for the root of the data structure (used in error messages).
+ * @returns A validation function that takes data as input and throws a TypeError if the data does not conform to the schema.
+ */
 export const compile = <T>(schema: Schema<T>, rootName: string) => {
   const context = new Context();
   const code = codeGen(schema, context, 'data', rootName);
@@ -295,6 +403,18 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
   return (data: T) => validator(context, data);
 };
 
+/**
+ * Asserts that data conforms to a given schema.
+ *
+ * This function is a convenient wrapper around `compile`. It compiles the schema
+ * and immediately validates the provided data against it.
+ *
+ * @template T - The type of data the schema validates.
+ * @param schema - The schema to validate against.
+ * @param data - The data to validate.
+ * @param rootName - A name for the root of the data structure (used in error messages, defaults to '[root]').
+ * @throws {TypeError} If the data does not conform to the schema.
+ */
 export const ascertain = <T>(schema: Schema<T>, data: T, rootName = '[root]') => {
   compile(schema, rootName)(data);
 };

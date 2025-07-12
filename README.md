@@ -180,7 +180,7 @@ const validate = ascertain<typeof data>(schema, data, '[DATA]');
 
 ## License
 License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2019-2024 Ivan Zakharchanka
+Copyright (c) 2019-2025 Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200

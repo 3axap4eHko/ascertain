@@ -1,6 +1,9 @@
-/.idea/
-/build/
-/coverage/
-/node_modules/
-/*.log*
-/.tmp
+.cache
+.temp
+build
+dist
+coverage
+node_modules
+*.log*
+*tmp.*
+codecov*
