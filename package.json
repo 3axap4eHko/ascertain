@@ -60,6 +60,7 @@
     "eslint": "^9.31.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.5.1",
+    "handlebars": "^4.7.8",
     "husky": "^9.1.7",
     "inop": "^0.7.8",
     "overtake": "^0.1.2",

@@ -48,7 +48,33 @@ class Or<T> extends Operator<T> {}
 /**
  * Operator for validating data against any of the provided schemas (logical OR).
  *
+ * Creates a schema that accepts data matching any one of the provided schemas.
+ * This is useful for creating union types or alternative validation paths.
+ *
  * @template T - The type of data the operator validates.
+ * @param schemas - Multiple schemas where at least one must match the data.
+ * @returns A schema that validates data against any of the provided schemas.
+ *
+ * @example
+ * ```typescript
+ * import { or, ascertain } from 'ascertain';
+ *
+ * // Create a schema that accepts either a string or number
+ * const stringOrNumber = or(String, Number);
+ *
+ * ascertain(stringOrNumber, "hello", "value"); // ✓ Valid
+ * ascertain(stringOrNumber, 42, "value");      // ✓ Valid
+ * ascertain(stringOrNumber, true, "value");    // ✗ Throws error
+ *
+ * // Union of literal values
+ * const statusSchema = or('pending', 'completed', 'failed');
+ * ascertain(statusSchema, 'pending', "status"); // ✓ Valid
+ *
+ * // Complex schema combinations
+ * const userIdSchema = or(Number, { id: Number, temp: Boolean });
+ * ascertain(userIdSchema, 123, "userId");                    // ✓ Valid
+ * ascertain(userIdSchema, { id: 456, temp: true }, "userId"); // ✓ Valid
+ * ```
  */
 export const or = <T>(...schemas: Schema<T>[]) => new Or(schemas);
 
@@ -56,7 +82,34 @@ class And<T> extends Operator<T> {}
 /**
  * Operator for validating data against all provided schemas (logical AND).
  *
+ * Creates a schema that requires data to match every one of the provided schemas.
+ * This is useful for combining multiple validation requirements or adding constraints.
+ *
  * @template T - The type of data the operator validates.
+ * @param schemas - Multiple schemas that all must match the data.
+ * @returns A schema that validates data against all of the provided schemas.
+ *
+ * @example
+ * ```typescript
+ * import { and, ascertain } from 'ascertain';
+ *
+ * // Combine object schema with additional constraints
+ * const userSchema = and(
+ *   { name: String, age: Number },
+ *   { age: Number } // Additional constraint
+ * );
+ *
+ * ascertain(userSchema, { name: "John", age: 25 }, "user"); // ✓ Valid
+ *
+ * // Ensure an object is both a Date and has specific methods
+ * const validDateSchema = and(Date, { toISOString: Function });
+ * ascertain(validDateSchema, new Date(), "date"); // ✓ Valid
+ *
+ * // Multiple validation layers
+ * const positiveNumberSchema = and(Number, (n: number) => n > 0);
+ * ascertain(positiveNumberSchema, 42, "count");   // ✓ Valid
+ * ascertain(positiveNumberSchema, -5, "count");   // ✗ Throws error
+ * ```
  */
 export const and = <T>(...schemas: Schema<T>[]) => new And(schemas);
 
@@ -68,7 +121,52 @@ class Optional<T> extends Operator<T> {
 /**
  * Operator for making a schema optional (nullable).
  *
+ * Creates a schema that accepts the provided schema or null/undefined values.
+ * This is useful for optional object properties or nullable fields.
+ *
  * @template T - The type of data the operator validates.
+ * @param schema - The schema to make optional.
+ * @returns A schema that validates data against the provided schema or accepts null/undefined.
+ *
+ * @example
+ * ```typescript
+ * import { optional, ascertain } from 'ascertain';
+ *
+ * // Optional string field
+ * const userSchema = {
+ *   name: String,
+ *   nickname: optional(String),
+ *   age: Number
+ * };
+ *
+ * // All of these are valid
+ * ascertain(userSchema, {
+ *   name: "John",
+ *   nickname: "Johnny",
+ *   age: 30
+ * }, "user"); // ✓ Valid
+ *
+ * ascertain(userSchema, {
+ *   name: "Jane",
+ *   nickname: null,
+ *   age: 25
+ * }, "user"); // ✓ Valid
+ *
+ * ascertain(userSchema, {
+ *   name: "Bob",
+ *   age: 35
+ *   // nickname is undefined
+ * }, "user"); // ✓ Valid
+ *
+ * // Optional complex objects
+ * const profileSchema = {
+ *   id: Number,
+ *   settings: optional({
+ *     theme: String,
+ *     notifications: Boolean
+ *   })
+ * };
+ * ```
  */
 export const optional = <T>(schema: Schema<T>) => new Optional(schema);
 
@@ -76,7 +174,39 @@ class Tuple<T> extends Operator<T> {}
 /**
  * Operator for validating data against a fixed-length tuple of schemas.
  *
+ * Creates a schema that validates arrays with a specific length and type for each position.
+ * This is useful for coordinate pairs, RGB values, or any fixed-structure data.
+ *
  * @template T - The type of data the operator validates (a tuple of types).
+ * @param schemas - Schemas for each position in the tuple, in order.
+ * @returns A schema that validates data as a tuple with the specified structure.
+ *
+ * @example
+ * ```typescript
+ * import { tuple, ascertain } from 'ascertain';
+ *
+ * // 2D coordinate tuple
+ * const pointSchema = tuple(Number, Number);
+ * ascertain(pointSchema, [10, 20], "point"); // ✓ Valid
+ * ascertain(pointSchema, [1.5, 2.7], "point"); // ✓ Valid
+ * ascertain(pointSchema, [10], "point"); // ✗ Throws error (too short)
+ * ascertain(pointSchema, [10, 20, 30], "point"); // ✗ Throws error (too long)
+ *
+ * // RGB color tuple
+ * const colorSchema = tuple(Number, Number, Number);
+ * ascertain(colorSchema, [255, 128, 0], "color"); // ✓ Valid
+ *
+ * // Mixed type tuple
+ * const userInfoSchema = tuple(String, Number, Boolean);
+ * ascertain(userInfoSchema, ["Alice", 25, true], "userInfo"); // ✓ Valid
+ *
+ * // Nested tuple
+ * const lineSchema = tuple(
+ *   tuple(Number, Number), // start point
+ *   tuple(Number, Number)  // end point
+ * );
+ * ascertain(lineSchema, [[0, 0], [10, 10]], "line"); // ✓ Valid
+ * ```
  */
 export const tuple = <T>(...schemas: Schema<T>[]) => new Tuple(schemas);
 
@@ -395,6 +525,38 @@ if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value \${JSON.st
  * @param schema - The schema to compile.
  * @param rootName - A name for the root of the data structure (used in error messages).
  * @returns A validation function that takes data as input and throws a TypeError if the data does not conform to the schema.
+ *
+ * @example
+ * ```typescript
+ * import { compile, optional, and, or } from 'ascertain';
+ *
+ * const userSchema = {
+ *   name: String,
+ *   age: Number,
+ *   email: optional(String),
+ *   role: or('admin', 'user', 'guest')
+ * };
+ *
+ * const validateUser = compile(userSchema, 'User');
+ *
+ * // Valid data - no error thrown
+ * validateUser({
+ *   name: 'John Doe',
+ *   age: 30,
+ *   email: 'john@example.com',
+ *   role: 'user'
+ * });
+ *
+ * // Invalid data - throws TypeError
+ * try {
+ *   validateUser({
+ *     name: 123, // Invalid: should be string
+ *     age: 'thirty' // Invalid: should be number
+ *   });
+ * } catch (error) {
+ *   console.error(error.message); // Detailed validation errors
+ * }
+ * ```
  */
 export const compile = <T>(schema: Schema<T>, rootName: string) => {
   const context = new Context();
@@ -413,7 +575,56 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  * @param schema - The schema to validate against.
  * @param data - The data to validate.
  * @param rootName - A name for the root of the data structure (used in error messages, defaults to '[root]').
- * @throws {TypeError} If the data does not conform to the schema.
+ * @throws `{TypeError}` If the data does not conform to the schema.
+ *
+ * @example
+ * ```typescript
+ * import { ascertain, optional, and, or } from 'ascertain';
+ *
+ * const userSchema = {
+ *   name: String,
+ *   age: Number,
+ *   email: optional(String),
+ *   active: Boolean
+ * };
+ *
+ * const userData = {
+ *   name: 'Alice',
+ *   age: 25,
+ *   email: 'alice@example.com',
+ *   active: true
+ * };
+ *
+ * // Validate data - throws if invalid, otherwise continues silently
+ * ascertain(userSchema, userData, 'UserData');
+ * console.log('User data is valid!');
+ *
+ * // Example with invalid data
+ * try {
+ *   ascertain(userSchema, {
+ *     name: 'Bob',
+ *     age: 'twenty-five', // Invalid: should be number
+ *     active: true
+ *   }, 'UserData');
+ * } catch (error) {
+ *   console.error('Validation failed:', error.message);
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Array validation
+ * const numbersSchema = [Number];
+ * const numbers = [1, 2, 3, 4, 5];
+ *
+ * ascertain(numbersSchema, numbers, 'Numbers');
+ *
+ * // Tuple validation
+ * const coordinateSchema = tuple(Number, Number);
+ * const point = [10, 20];
+ *
+ * ascertain(coordinateSchema, point, 'Point');
+ * ```
  */
 export const ascertain = <T>(schema: Schema<T>, data: T, rootName = '[root]') => {
   compile(schema, rootName)(data);

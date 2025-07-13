@@ -27,106 +27,28 @@
 
 ## API
 
-- [`$keys`](#keys)
-- [`$values`](#values)
-- [`$strict`](#strict)
-- [`or(...schemas: Schema[])`](#orschemas-schema)
-- [`and(...schemas: Schema[])`](#andschemas-schema)
-- [`optional(schema: Schema)`](#optionalschema-schema)
-- [`tuple(...schemas: Schema[])`](#tupleschemas-schema)
-- [`compile(schema: Schema, rootName: string)`](#compileschema-schema-rootname-string)
-- [`ascertain(schema: Schema, data: T, rootName = "[root]")`](#ascertainschema-schema-data-t-rootname--root)
+{{#each namespaces}}
+{{#unless name}}
+{{#each members}}
+- [`{{key}}{{#each members}}{{#if (eq type 'function')}}({{#each args}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}){{/if}}{{returnType}}{{/each}}`](#{{makeAnchor key members}})
+{{/each}}
+{{/unless}}
+{{/each}}
 
-### `$keys`
+{{#each namespaces}}
+{{#unless name}}
+{{#each members}}
+{{#each members}}
+### `{{../key}}{{#if (eq type 'function')}}({{#each args}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}){{/if}}{{returnType}}`
 
- Symbol for validating object keys against a schema.
- 
+{{#each docs}}
+{{{this}}}
+{{/each}}
 
-### `$values`
-
- Symbol for validating object values against a schema.
- 
-
-### `$strict`
-
- Symbol for enforcing strict object validation (no extra properties allowed).
- 
-
-### `or(...schemas: Schema[])`
-
- Operator for validating data against any of the provided schemas (logical OR).
- 
- Creates a schema that accepts data matching any one of the provided schemas.
- This is useful for creating union types or alternative validation paths.
-
-- @template T - The type of data the operator validates.
-- @param schemas - Multiple schemas where at least one must match the data.
-- @returns A schema that validates data against any of the provided schemas.
- 
-
-### `and(...schemas: Schema[])`
-
- Operator for validating data against all provided schemas (logical AND).
- 
- Creates a schema that requires data to match every one of the provided schemas.
- This is useful for combining multiple validation requirements or adding constraints.
-
-- @template T - The type of data the operator validates.
-- @param schemas - Multiple schemas that all must match the data.
-- @returns A schema that validates data against all of the provided schemas.
- 
-
-### `optional(schema: Schema)`
-
- Operator for making a schema optional (nullable).
- 
- Creates a schema that accepts the provided schema or null/undefined values.
- This is useful for optional object properties or nullable fields.
-
-- @template T - The type of data the operator validates.
-- @param schema - The schema to make optional.
-- @returns A schema that validates data against the provided schema or accepts null/undefined.
- 
-
-### `tuple(...schemas: Schema[])`
-
- Operator for validating data against a fixed-length tuple of schemas.
- 
- Creates a schema that validates arrays with a specific length and type for each position.
- This is useful for coordinate pairs, RGB values, or any fixed-structure data.
-
-- @template T - The type of data the operator validates (a tuple of types).
-- @param schemas - Schemas for each position in the tuple, in order.
-- @returns A schema that validates data as a tuple with the specified structure.
- 
-
-### `compile(schema: Schema, rootName: string)`
-
- Compiles a schema into a validation function.
- 
- This function takes a schema definition and generates a JavaScript function
- that can be used to validate data against the schema.
-
-- @template T - The type of data the schema validates.
-- @param schema - The schema to compile.
-- @param rootName - A name for the root of the data structure (used in error messages).
-- @returns A validation function that takes data as input and throws a TypeError if the data does not conform to the schema.
- 
-
-### `ascertain(schema: Schema, data: T, rootName = "[root]")`
-
- Asserts that data conforms to a given schema.
- 
- This function is a convenient wrapper around `compile`. It compiles the schema
- and immediately validates the provided data against it.
-
-- @template T - The type of data the schema validates.
-- @param schema - The schema to validate against.
-- @param data - The data to validate.
-- @param rootName - A name for the root of the data structure (used in error messages, defaults to '[root]').
-- @throws `{TypeError}` If the data does not conform to the schema.
- 
-
+{{/each}}
+{{/each}}
+{{/unless}}
+{{/each}}
 
 ## Usage Example
 
