@@ -55,7 +55,7 @@
 ### `or(...schemas: Schema[])`
 
  Operator for validating data against any of the provided schemas (logical OR).
- 
+
  Creates a schema that accepts data matching any one of the provided schemas.
  This is useful for creating union types or alternative validation paths.
 
@@ -67,7 +67,7 @@
 ### `and(...schemas: Schema[])`
 
  Operator for validating data against all provided schemas (logical AND).
- 
+
  Creates a schema that requires data to match every one of the provided schemas.
  This is useful for combining multiple validation requirements or adding constraints.
 
@@ -79,7 +79,7 @@
 ### `optional(schema: Schema)`
 
  Operator for making a schema optional (nullable).
- 
+
  Creates a schema that accepts the provided schema or null/undefined values.
  This is useful for optional object properties or nullable fields.
 
@@ -91,7 +91,7 @@
 ### `tuple(...schemas: Schema[])`
 
  Operator for validating data against a fixed-length tuple of schemas.
- 
+
  Creates a schema that validates arrays with a specific length and type for each position.
  This is useful for coordinate pairs, RGB values, or any fixed-structure data.
 
@@ -103,7 +103,7 @@
 ### `compile(schema: Schema, rootName: string)`
 
  Compiles a schema into a validation function.
- 
+
  This function takes a schema definition and generates a JavaScript function
  that can be used to validate data against the schema.
 
@@ -116,7 +116,7 @@
 ### `ascertain(schema: Schema, data: T, rootName = "[root]")`
 
  Asserts that data conforms to a given schema.
- 
+
  This function is a convenient wrapper around `compile`. It compiles the schema
  and immediately validates the provided data against it.
 

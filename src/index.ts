@@ -247,7 +247,7 @@ export const as = {
    * Attempts to convert a value to a Date object.
    *
    * @param value - The value to convert (expected to be a string representation of a date).
-   * @returns The value as a Date object, or a TypeError if no a valid date.
+   * @returns The value as a Date object, or a TypeError if not a valid date.
    */
   date: (value: string | undefined): Date => {
     const result = Date.parse(value as string);
@@ -493,14 +493,14 @@ ${codeGenExpectNoErrors(errorsAlias)}
     return `
 const ${valueAlias} = ${valuePath};
 const ${registryAlias} = ctx.registry[${index}];
-if (typeof ${valueAlias} !== 'symbol') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for "path", expected symbol\`); }
+if (typeof ${valueAlias} !== 'symbol') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected symbol\`); }
 if (${valueAlias} !== ${registryAlias}) { throw new TypeError(\`Invalid value \${${valueAlias}.toString()} for path "${path}", expected ${schema.toString()}\`); }
     `;
   } else if (schema === null || schema === undefined) {
     const valueAlias = context.unique('v');
     return `
 const ${valueAlias} = ${valuePath};
-if (${valueAlias} !== null && ${valueAlias} !== undefined ) { throw new TypeError(\`Invalid value ${valueAlias} for path "${path}", expected nullable\`); }
+if (${valueAlias} !== null && ${valueAlias} !== undefined ) { throw new TypeError(\`Invalid value \${JSON.stringify(${valueAlias})} for path "${path}", expected nullable\`); }
     `;
   } else {
     const valueAlias = context.unique('v');

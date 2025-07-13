@@ -87,6 +87,9 @@ describe('Ascertain test suite', () => {
       ['Array schema', [Number], {}, 'expected an instance of Array'],
       ['Array enum schema', [Number, String], [1, '3', false], /expected type (Number|String)/],
       ['Non object target', {}, 2, 'expected an instance of Object'],
+      ['Symbol validation wrong type', { sym: Symbol('test') }, { sym: 'not-a-symbol' }, /for path "\[DATA\]\.sym"/],
+      ['Symbol validation wrong value', { sym: Symbol('test') }, { sym: Symbol('different') }, 'expected Symbol(test)'],
+      ['Null validation with wrong value', { val: null }, { val: 'not-null' }, /Invalid value "not-null" for path "\[DATA\]\.val"/],
     ])('Should validate schema type %s negative', (_, schema, target: any, message) => {
       expect(() => validate(schema, target)).toThrow(message);
     });
