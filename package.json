@@ -74,5 +74,5 @@
     "vue": "^3.5.18",
     "vuepress": "2.0.0-rc.24"
   },
-  "packageManager": "pnpm@10.14.0"
+  "packageManager": "pnpm@10.15.0"
 }
