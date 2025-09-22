@@ -105,10 +105,6 @@ class And<T> extends Operator<T> {}
  * const validDateSchema = and(Date, { toISOString: Function });
  * ascertain(validDateSchema, new Date(), "date"); // ✓ Valid
  *
- * // Multiple validation layers
- * const positiveNumberSchema = and(Number, (n: number) => n > 0);
- * ascertain(positiveNumberSchema, 42, "count");   // ✓ Valid
- * ascertain(positiveNumberSchema, -5, "count");   // ✗ Throws error
  * ```
  */
 export const and = <T>(...schemas: Schema<T>[]) => new And(schemas);
@@ -221,6 +217,8 @@ const MULTIPLIERS = {
   w: 604800000,
 };
 
+const TIME_REGEX = /^(\d*\.?\d*)(ms|s|m|h|d|w)?$/;
+
 export const asError = <T>(message: string) => new TypeError(message) as unknown as T;
 
 export const as = {
@@ -262,12 +260,20 @@ export const as = {
    * @returns The time duration in milliseconds, or a TypeError if the format is invalid.
    */
   time: (value: string | undefined, conversionFactor = 1): number => {
-    const matches = value?.match(/^(\d*\.?\d*)(ms|s|m|h|d|w)?$/);
-    if (matches) {
-      const [, amount, unit = 'ms'] = matches;
-      return parseInt(`${(parseFloat(amount) * MULTIPLIERS[unit as keyof typeof MULTIPLIERS]) / conversionFactor}`);
+    if (!value) return asError(`Invalid value ${value}, expected a valid time format`);
+
+    const matches = value.match(TIME_REGEX);
+    if (!matches) return asError(`Invalid value ${value}, expected a valid time format`);
+
+    const [, amount, unit = 'ms'] = matches;
+    const multiplier = MULTIPLIERS[unit as keyof typeof MULTIPLIERS];
+    const parsed = parseFloat(amount);
+
+    if (!multiplier || Number.isNaN(parsed)) {
+      return asError(`Invalid value ${value}, expected a valid time format`);
     }
-    return asError(`Invalid value ${value}, expected a valid time format`);
+
+    return Math.floor((parsed * multiplier) / conversionFactor);
   },
   /**
    * Attempts to convert a value to a boolean.
@@ -324,13 +330,19 @@ export const as = {
  */
 class Context {
   public readonly registry: unknown[] = [];
+  private readonly lookupMap: Map<unknown, number> = new Map();
   private varIndex = 0;
 
   register(value: unknown): number {
-    if (!this.registry.includes(value)) {
-      this.registry.push(value);
+    const index = this.lookupMap.get(value);
+    if (index !== undefined) {
+      return index;
     }
-    return this.registry.indexOf(value);
+    {
+      const index = this.registry.push(value) - 1;
+      this.lookupMap.set(value, index);
+      return index;
+    }
   }
 
   unique(prefix: string) {
@@ -441,7 +453,7 @@ if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.sc
 const ${valueAlias} = ${valuePath};
 ${codeGenExpectNonNullable(valueAlias, path)}
 ${codeGenExpectNonError(valueAlias, path)}
-if (!${schema.toString()}.test('' + ${valueAlias})) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected to match ${schema.toString()}\`); }
+if (!${schema.toString()}.test(String(${valueAlias}))) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected to match ${schema.toString()}\`); }
 `;
     } else {
       const valueAlias = context.unique('v');
