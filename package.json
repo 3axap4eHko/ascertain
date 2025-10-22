@@ -62,7 +62,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "handlebars": "^4.7.8",
     "husky": "^9.1.7",
-    "inop": "^0.7.28",
+    "inop": "^0.7.29",
     "overtake": "^0.1.2",
     "prettier": "^3.6.2",
     "recast": "^0.23.11",
@@ -74,5 +74,5 @@
     "vue": "^3.5.22",
     "vuepress": "2.0.0-rc.26"
   },
-  "packageManager": "pnpm@10.18.3"
+  "packageManager": "pnpm@10.19.0"
 }
