@@ -62,7 +62,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "handlebars": "^4.7.8",
     "husky": "^9.1.7",
-    "inop": "^0.7.40",
+    "inop": "^0.7.41",
     "overtake": "^0.1.2",
     "prettier": "^3.6.2",
     "recast": "^0.23.11",
