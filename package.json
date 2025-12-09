@@ -50,10 +50,10 @@
   "homepage": "https://github.com/3axap4eHko/ascertain#readme",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@typescript-eslint/eslint-plugin": "^8.48.1",
-    "@typescript-eslint/parser": "^8.48.1",
-    "@typescript-eslint/typescript-estree": "^8.48.1",
+    "@types/node": "^24.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "@typescript-eslint/typescript-estree": "^8.49.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vuepress/bundler-vite": "2.0.0-rc.26",
     "@vuepress/theme-default": "2.0.0-rc.120",
@@ -69,10 +69,10 @@
     "sass-embedded": "^1.93.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.1",
+    "typescript-eslint": "^8.49.0",
     "vitest": "^3.2.4",
     "vue": "^3.5.25",
     "vuepress": "2.0.0-rc.26"
   },
-  "packageManager": "pnpm@10.24.0"
+  "packageManager": "pnpm@10.25.0"
 }
