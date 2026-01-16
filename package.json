@@ -50,7 +50,7 @@
   "homepage": "https://github.com/3axap4eHko/ascertain#readme",
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/node": "^24.10.8",
+    "@types/node": "^24.10.9",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "@typescript-eslint/typescript-estree": "^8.53.0",
