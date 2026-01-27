@@ -1,16 +1,19 @@
-import { ascertain, compile, optional, and, or, tuple, $keys, $values, $strict, as, Schema } from '../index';
+import { ascertain, compile, optional, and, or, tuple, $keys, $values, $strict, as, Schema, createValidator } from '../index';
 
 const fixture = {
   a: 1,
   b: 'string',
   c: true,
   d: [1, 2, 3, 4, 5],
+  dt: [1, true],
   e: { f: 1 },
   f() {},
   g: null,
   h: new Date(),
   i: undefined,
   j: Symbol('test'),
+  k: BigInt(123),
+  l: Symbol.for('test-symbol'),
 };
 
 const validate = (schema: unknown, data: any) => {
@@ -27,10 +30,20 @@ describe('Ascertain test suite', () => {
       ['Number', { a: Number }, fixture],
       ['String', { b: String }, fixture],
       ['Boolean', { c: Boolean }, fixture],
+      ['BigInt', { k: BigInt }, fixture],
+      ['Symbol', { l: Symbol }, fixture],
       ['Function', { f: Function }, fixture],
+      ['Function async', { f: Function }, { f: async () => {} }],
+      ['Function async declaration', { f: Function }, { f: async function() {} }],
+      ['Function generator', { f: Function }, { f: function* () {} }],
+      ['Function async generator', { f: Function }, { f: async function* () {} }],
+      ['Function bound', { f: Function }, { f: (() => {}).bind(null) }],
+      ['Function class', { f: Function }, { f: class {} }],
       ['Array', { d: Array }, fixture],
       ['[]', { d: [] }, fixture],
-      ['[Number]', { d: [Number] }, fixture],
+      ['Array [Number]', { d: [Number] }, fixture],
+      ['Tuple of Number', { d: [Number,Number,Number,Number,Number] }, fixture],
+      ['Tuple [Number, Boolean]', { dt: [Number,Boolean] }, fixture],
       ['Object', { e: Object }, fixture],
       ['{}', { e: {} }, fixture],
       ['Error', { error: Error }, { error: new Error() }],
@@ -61,13 +74,16 @@ describe('Ascertain test suite', () => {
       ['Number', { c: Number }, { c: as.number('test') }, 'expected a valid number'],
       ['String', { a: String }, fixture, 'expected type String'],
       ['Boolean', { b: Boolean }, fixture, 'expected type Boolean'],
+      ['BigInt', { a: BigInt }, fixture, 'expected type BigInt'],
+      ['Symbol', { a: Symbol }, fixture, 'expected type Symbol'],
       ['Date', { d: Date }, { d: new Date('nothing') }, 'expected a valid Date'],
       ['Error', { value: 'test' }, { value: new Error('Invalid test') }, 'Invalid test for path'],
       ['Function', { a: Function }, fixture, 'expected type Function'],
       ['Array', { e: Array }, fixture, 'expected an instance of Array'],
       ['[]', { e: [] }, fixture, 'expected an instance of Array'],
       ['[String]', { d: [String] }, fixture, 'expected type String'],
-      ['[Boolean, String]', { d: [Boolean, String] }, fixture, /expected type (Boolean|String)/],
+      ['Array [Boolean or String]', { d: [or(Boolean, String)] }, fixture, /expected type (Boolean|String)/],
+      ['Tuple [Boolean, String]', { dt: [Boolean, String] }, fixture, /expected type (Boolean|String)/],
       ['Object', { c: Object }, fixture, 'expected type Object'],
       ['Object properties', { e: { d: Number } }, fixture, 'non-nullable'],
       ['{}', { i: {} }, fixture, 'expected non-nullable'],
@@ -85,7 +101,7 @@ describe('Ascertain test suite', () => {
       ['Values', { e: { [$values]: String } }, fixture, 'expected type String'],
       ['Values', { e: { [$strict]: true } }, fixture, 'not allowed'],
       ['Array schema', [Number], {}, 'expected an instance of Array'],
-      ['Array enum schema', [Number, String], [1, '3', false], /expected type (Number|String)/],
+      ['Array enum schema', [or(Number, String)], [1, '3', false], /expected type (Number|String)/],
       ['Non object target', {}, 2, 'expected an instance of Object'],
       ['Symbol validation wrong type', { sym: Symbol('test') }, { sym: 'not-a-symbol' }, /for path "\[DATA\]\.sym"/],
       ['Symbol validation wrong value', { sym: Symbol('test') }, { sym: Symbol('different') }, 'expected Symbol(test)'],
@@ -170,7 +186,19 @@ describe('Ascertain test suite', () => {
   describe('for conversion utils', () => {
     it.each([
       ['string', as.string, 'string', 'string'],
-      ['number', as.number, '1', 1],
+      ['number int', as.number, '42', 42],
+      ['number negative', as.number, '-5', -5],
+      ['number float', as.number, '3.14', 3.14],
+      ['number float negative', as.number, '-3.14', -3.14],
+      ['number scientific', as.number, '1e10', 1e10],
+      ['number scientific float', as.number, '1.5e2', 150],
+      ['number hex', as.number, '0xFF', 255],
+      ['number hex lowercase', as.number, '0xff', 255],
+      ['number hex negative', as.number, '-0xff', -255],
+      ['number octal', as.number, '0o77', 63],
+      ['number octal negative', as.number, '-0o77', -63],
+      ['number binary', as.number, '0b1010', 10],
+      ['number binary negative', as.number, '-0b1010', -10],
       ['date', as.date, '2024-12-31', new Date('2024-12-31')],
       ['time', as.time, '1m', 60 * 1000],
       ['boolean true', as.boolean, '1', true],
@@ -181,11 +209,17 @@ describe('Ascertain test suite', () => {
     ])('Should convert to %s', (_, convert, value, expected) => {
       expect(convert(value)).toEqual(expected);
     });
+
     it.each([
       ['string', as.string, undefined],
       ['number', as.number, undefined],
+      ['number invalid hex', as.number, '0xGG'],
+      ['number invalid octal', as.number, '0o99'],
+      ['number invalid binary', as.number, '0b222'],
       ['date', as.date, undefined],
       ['time', as.time, undefined],
+      ['time', as.time, 'ss'],
+      ['time', as.time, '.ms'],
       ['boolean true', as.boolean, undefined],
       ['boolean false', as.boolean, undefined],
       ['array', (v: string) => as.array(v, ','), undefined],
@@ -227,6 +261,43 @@ describe('Ascertain test suite', () => {
           hosts: ['a'],
         });
       }).toThrow('[DATA].hosts[0]');
+    });
+  });
+
+  describe('createValidator', () => {
+    it('should return same reference with narrowed type', () => {
+      const config = {
+        app: { name: 'test', port: 3000 },
+        kafka: { brokers: ['localhost'] },
+        redis: { host: 'localhost' },
+      };
+
+      const validateConfig = createValidator(config, '[CONFIG]');
+      const validated = validateConfig({
+        app: { name: String, port: Number },
+        kafka: { brokers: [String] },
+      });
+
+      expect(validated).toBe(config);
+      expect(validated.app.name).toBe('test');
+      expect(validated.kafka.brokers).toEqual(['localhost']);
+    });
+
+    it('should throw on invalid config', () => {
+      const config = {
+        app: { name: 123 },
+      };
+
+      const validateConfig = createValidator(config, '[CONFIG]');
+
+      expect(() => validateConfig({ app: { name: String } })).toThrow('[CONFIG].app.name');
+    });
+
+    it('should use default rootName', () => {
+      const config = { value: 'not-a-number' };
+      const validateConfig = createValidator(config);
+
+      expect(() => validateConfig({ value: Number })).toThrow('[root]');
     });
   });
 });

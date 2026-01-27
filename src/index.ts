@@ -206,6 +206,14 @@ class Tuple<T> extends Operator<T> {}
  */
 export const tuple = <T>(...schemas: Schema<T>[]) => new Tuple(schemas);
 
+/**
+ * Decodes a base64-encoded string to UTF-8.
+ *
+ * Uses `Buffer` in Node.js environments and `atob` in browsers.
+ *
+ * @param value - The base64-encoded string to decode.
+ * @returns The decoded UTF-8 string.
+ */
 export const fromBase64 = typeof Buffer === 'undefined' ? (value: string) => atob(value) : (value: string) => Buffer.from(value, 'base64').toString('utf-8');
 
 const MULTIPLIERS = {
@@ -219,6 +227,16 @@ const MULTIPLIERS = {
 
 const TIME_REGEX = /^(\d*\.?\d*)(ms|s|m|h|d|w)?$/;
 
+/**
+ * Creates a TypeError with the given message, typed as T for deferred error handling.
+ *
+ * Used by `as.*` conversion utilities to return errors that can be caught
+ * during schema validation rather than throwing immediately.
+ *
+ * @template T - The expected return type (for type compatibility with conversion functions).
+ * @param message - The error message.
+ * @returns A TypeError instance typed as T.
+ */
 export const asError = <T>(message: string) => new TypeError(message) as unknown as T;
 
 export const as = {
@@ -234,11 +252,32 @@ export const as = {
   /**
    * Attempts to convert a value to a number.
    *
+   * Supports integers, floats, scientific notation (1e10), and prefixed formats:
+   * - Hexadecimal: `0x` or `0X` (e.g., `'0xFF'` → 255)
+   * - Octal: `0o` or `0O` (e.g., `'0o77'` → 63)
+   * - Binary: `0b` or `0B` (e.g., `'0b1010'` → 10)
+   *
+   * All formats support optional leading sign (`+` or `-`).
+   *
    * @param value - The value to convert (expected to be a string representation of a number).
    * @returns The value as a number, or a TypeError if not a valid number.
    */
   number: (value: string | undefined): number => {
-    const result = parseFloat(value as string);
+    if (typeof value !== 'string') {
+      return asError(`Invalid value ${value}, expected a valid number`);
+    }
+    const start = value[0] === '-' || value[0] === '+' ? 1 : 0;
+    const c0 = value.charCodeAt(start);
+    const c1 = value.charCodeAt(start + 1) | 32;
+
+    if (c0 === 48 && (c1 === 120 || c1 === 111 || c1 === 98)) {
+      // '0' followed by 'x', 'o', or 'b'
+      const result = Number(start ? value.slice(1) : value);
+      if (Number.isNaN(result)) return asError(`Invalid value ${value}, expected a valid number`);
+      return value[0] === '-' ? -result : result;
+    }
+
+    const result = value.includes('.') || value.includes('e') || value.includes('E') ? parseFloat(value) : parseInt(value, 10);
     return Number.isNaN(result) ? asError(`Invalid value ${value}, expected a valid number`) : result;
   },
   /**
@@ -399,29 +438,55 @@ if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.sc
       codeGenExpectNonNullable(valueAlias, path),
       codeGenExpectObject(valueAlias, path, 'Array'),
       codeGenExpectArray(valueAlias, path),
-      `if (${valueAlias}.length > ${schema.schemas.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.schemas.length}.\`); }`,
+      `if (${valueAlias}.length !== ${schema.schemas.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.schemas.length}.\`); }`,
       ...schema.schemas.map((s, idx) => codeGenCollectErrors(errorsAlias, codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`))),
       codeGenExpectNoErrors(errorsAlias),
     ];
     return code.join('\n');
   } else if (typeof schema === 'function') {
-    const index = context.register(schema);
     const valueAlias = context.unique('v');
-    const registryAlias = context.unique('r');
-    const code: string[] = [
-      `const ${valueAlias} = ${valuePath};`,
-      `const ${registryAlias} = ctx.registry[${index}];`,
-      codeGenExpectNonNullable(valueAlias, path),
-    ];
+    const code: string[] = [`const ${valueAlias} = ${valuePath};`, codeGenExpectNonNullable(valueAlias, path)];
     if ((schema as unknown) !== Error && !(schema?.prototype instanceof Error)) {
       code.push(codeGenExpectNonError(valueAlias, path));
     }
 
-    code.push(
-      `if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}?.constructor?.name} for path "${path}", expected an instance of ${schema?.name}\`); }`,
-      `if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new TypeError(\`Invalid type \${${valueAlias}?.constructor?.name} for path "${path}", expected type ${schema?.name}\`); }`,
-      `if (Number.isNaN(${valueAlias}?.valueOf?.())) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
-    );
+    const name = (schema as { name?: string })?.name;
+    const primitiveType =
+      name === 'String'
+        ? 'string'
+        : name === 'Number'
+          ? 'number'
+          : name === 'Boolean'
+            ? 'boolean'
+            : name === 'BigInt'
+              ? 'bigint'
+              : name === 'Symbol'
+                ? 'symbol'
+                : null;
+
+    if (primitiveType) {
+      code.push(
+        `if (typeof ${valueAlias} !== '${primitiveType}') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected type ${schema?.name}\`); }`,
+      );
+      if (primitiveType === 'number') {
+        code.push(
+          `if (Number.isNaN(${valueAlias})) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
+        );
+      }
+    } else if (name === 'Function') {
+      code.push(
+        `if (typeof ${valueAlias} !== 'function') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected type Function\`); }`,
+      );
+    } else {
+      const index = context.register(schema);
+      const registryAlias = context.unique('r');
+      code.push(
+        `const ${registryAlias} = ctx.registry[${index}];`,
+        `if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}?.constructor?.name} for path "${path}", expected an instance of ${schema?.name}\`); }`,
+        `if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new TypeError(\`Invalid type \${${valueAlias}?.constructor?.name} for path "${path}", expected type ${schema?.name}\`); }`,
+        `if (Number.isNaN(${valueAlias}?.valueOf?.())) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
+      );
+    }
     return code.join('\n');
   } else if (Array.isArray(schema)) {
     const valueAlias = context.unique('v');
@@ -437,11 +502,20 @@ if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.sc
       const key = context.unique('key');
       const errorsAlias = context.unique('err');
       code.push(`const ${errorsAlias} = [];`);
-      code.push(
-        ...schema.map(
-          (s) => `${valueAlias}.forEach((${value},${key}) => { ${codeGenCollectErrors(errorsAlias, codeGen(s, context, value, `${path}[\${${key}}]`))} });`,
-        ),
-      );
+
+      if (schema.length === 1) {
+        code.push(
+          ...schema.map(
+            (s) =>
+              `for (let ${key} = 0; ${key} < ${valueAlias}.length; ${key}++) { const ${value} = ${valueAlias}[${key}]; ${codeGenCollectErrors(errorsAlias, codeGen(s, context, value, `${path}[\${${key}}]`))} }`,
+          ),
+        );
+      } else {
+        code.push(
+          `if (${valueAlias}.length > ${schema.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.length}.\`); }`,
+        );
+        code.push(...schema.map((s, idx) => codeGenCollectErrors(errorsAlias, codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`))));
+      }
 
       code.push(codeGenExpectNoErrors(errorsAlias));
     }
@@ -470,7 +544,7 @@ if (!${schema.toString()}.test(String(${valueAlias}))) { throw new TypeError(\`I
         code.push(`
 const ${keysAlias} = Object.keys(${valueAlias});
 const ${errorsAlias} = [];
-${keysAlias}.forEach(${kAlias} => { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$keys], context, kAlias, `${path}[\${${kAlias}}]`))} });
+for (const ${kAlias} of ${keysAlias}) { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$keys], context, kAlias, `${path}[\${${kAlias}}]`))} }
 ${codeGenExpectNoErrors(errorsAlias)}
 `);
       }
@@ -482,7 +556,7 @@ ${codeGenExpectNoErrors(errorsAlias)}
         code.push(`
 const ${entriesAlias} = Object.entries(${valueAlias});
 const ${errorsAlias} = [];
-${entriesAlias}.forEach(([${kAlias},${vAlias}]) => { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$values], context, vAlias, `${path}[\${${kAlias}}]`))} });
+for (const [${kAlias}, ${vAlias}] of ${entriesAlias}) { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$values], context, vAlias, `${path}[\${${kAlias}}]`))} }
 ${codeGenExpectNoErrors(errorsAlias)}
 `);
       }
@@ -494,7 +568,7 @@ ${codeGenExpectNoErrors(errorsAlias)}
         code.push(`const ${extraAlias} = Object.keys(${valueAlias}).filter(${kAlias} => !${keysAlias}.has(${kAlias}));`);
         code.push(`if (${extraAlias}.length !== 0) { throw new TypeError(\`Extra properties: \${${extraAlias}}, are not allowed for path "${path}"\`); }`);
       }
-      code.push(...Object.entries(schema).map(([key, s]) => codeGen(s, context, `${valueAlias}['${key}']`, `${path}.${key}`)));
+      code.push(...Object.entries(schema).map(([key, s]) => codeGen(s, context, `${valueAlias}[${JSON.stringify(key)}]`, `${path}.${key}`)));
       return `${code.join('\n')}`;
     }
   } else if (typeof schema === 'symbol') {
@@ -640,4 +714,53 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  */
 export const ascertain = <T>(schema: Schema<T>, data: T, rootName = '[root]') => {
   compile(schema, rootName)(data);
+};
+
+/**
+ * Extracts the shape of a config object based on the schema keys.
+ * Recursively picks only the properties defined in the schema.
+ */
+export type ExtractShape<C, S> = {
+  [K in keyof S & keyof C]: S[K] extends object ? (C[K] extends object ? ExtractShape<C[K], S[K]> : C[K]) : C[K];
+};
+
+/**
+ * Creates a typed validator function for a config object.
+ *
+ * Returns a function that validates a schema against the config and returns
+ * the same config reference with a narrowed type containing only the validated fields.
+ *
+ * @template C - The type of the config object.
+ * @param config - The config object to validate against.
+ * @param rootName - A name for the root of the data structure (used in error messages).
+ * @returns A validator function that takes a schema and returns the typed config subset.
+ *
+ * @example
+ * ```typescript
+ * import { createValidator, as } from 'ascertain';
+ *
+ * const config = {
+ *   app: { name: as.string(process.env.APP_NAME) },
+ *   kafka: { brokers: as.array(process.env.BROKERS, ',') },
+ *   redis: { host: as.string(process.env.REDIS_HOST) },
+ * };
+ *
+ * const validate = createValidator(config, '[CONFIG]');
+ *
+ * // Consumer only validates what it needs
+ * const { app, kafka } = validate({
+ *   app: { name: String },
+ *   kafka: { brokers: [String] },
+ * });
+ *
+ * // app.name is typed as string
+ * // kafka.brokers is typed as string[]
+ * // redis is not accessible - TypeScript error
+ * ```
+ */
+export const createValidator = <C>(config: C, rootName = '[root]') => {
+  return <S extends Schema<Partial<C>>>(schema: S): ExtractShape<C, S> => {
+    ascertain(schema as Schema<C>, config, rootName);
+    return config as ExtractShape<C, S>;
+  };
 };

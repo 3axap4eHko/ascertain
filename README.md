@@ -1,8 +1,6 @@
 # Ascertain
 
-### Ascertain what data is not suitable for your library
-
-0-Deps, simple, blazing fast, for browser and Node.js object schema validator
+Zero-dependency, high-performance schema validator for Node.js and browsers.
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][github-image]][github-url]
@@ -10,182 +8,216 @@
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
 
-
 [Documentation](https://3axap4ehko.github.io/ascertain/)
 
 ## Features
 
-- Type-safe validation: Ensures your data conforms to predefined schemas.
-- Composite schemas: Supports logical AND, OR, and optional schemas.
-- Type casting: Automatically parses and casts strings to other types.
-- Error handling: Provides detailed error messages for invalid data.
+- **Zero dependencies**: Minimal footprint, no external dependencies
+- **High performance**: Compiles schemas to optimized JavaScript functions
+- **Type-safe**: Full TypeScript support with type inference
+- **Flexible schemas**: Supports AND, OR, optional, and tuple operators
+- **Type casting**: Built-in parsers for numbers, dates, JSON, base64, and more
+- **Object validation**: Validate keys and values with `$keys`, `$values`, and `$strict`
+- **Detailed errors**: Clear error messages with paths for debugging
 
-## Schema description
+## Installation
 
- - Primitive Values: Any primitive value (e.g., string, number, bigint, boolean, undefined, symbol, null) is used as an expected constant to match against.
- - Function Types: Functions are used as constructors for non-objects and instance types for object types.
- - Array Values: Arrays are used to represent an expected array type, where every item in the array must match the specified type (acting as an "and" operator).
- - Regular Expressions: Regular expressions are used to validate that a value matches a specified string pattern.
- - Object Types: Non-null objects are used as templates for expected properties, where each property of the object must match the corresponding schema definition.
+```bash
+npm install ascertain
+# or
+pnpm add ascertain
+```
 
+## Quick Start
 
-
-## Usage Example
-
-### Schema compilation
 ```typescript
-import { compile, optional, and, or, $keys, $values, Schema, as } from 'ascertain';
+import { ascertain, compile, or, optional } from 'ascertain';
 
-const validate = compile({
-  number: Number,
-  string: String,
-  boolean: Boolean,
-  function: Function,
-  array: Array,
-  object: Object,
-  date: and(Date, { toJSON: Function }),
-  regexp: /regexp/,
-  oneOfValue: or(1, 2, 3),
-  arrayOfNumbers: [Number],
-  objectSchema: {
-    number: Number,
-  },
-  optional: optional({
-    number: Number,
-  }),
-  keyValue: {
-    [$keys]: /^key[A-Z]/,
-    [$values]: Number
-  },
-  parsedNumber: Number,
-  parsedString: String,
-  parsedBoolean: Boolean,
-  parsedArray: [String],
-  parsedJSON: {
-    number: 1,
-  },
-  parsedBase64: String,
-  parsedTime: 2 * 60 * 1000, // two minutes
-  parsedDate: Date,
+// Define a schema
+const userSchema = {
+  name: String,
+  age: Number,
+  email: optional(String),
+  role: or('admin', 'user', 'guest'),
+};
+
+// Validate data (throws on invalid)
+ascertain(userSchema, userData, 'User');
+```
+
+## Performance
+
+Ascertain compiles schemas into optimized JavaScript functions at runtime. This compilation step generates specialized validation code that runs significantly faster than interpreting schemas on each validation.
+
+**For best performance, compile schemas once and reuse the validator:**
+
+```typescript
+import { compile } from 'ascertain';
+
+// Compile once at startup
+const validateUser = compile(userSchema, 'User');
+
+// Reuse for each validation (no recompilation)
+validateUser(user1);
+validateUser(user2);
+```
+
+Use `ascertain()` for one-off validations where convenience matters more than performance. Use `compile()` when validating the same schema repeatedly (e.g., API request handlers).
+
+### Benchmark
+
+| Library | Operations/sec | Relative Speed |
+|---------|----------------|----------------|
+| **Ascertain** | 58,962,264 | **1.0x (fastest)** |
+| AJV | 42,204,777 | 0.72x |
+| Zod | 32,309,133 | 0.55x |
+
+```bash
+pnpm bench
+```
+
+## Schema Types
+
+| Schema | Description | Example |
+|--------|-------------|---------|
+| Primitives | Match exact values | `42`, `'active'`, `true`, `null` |
+| Constructors | Validate by type | `String`, `Number`, `Boolean`, `Date` |
+| Arrays | Validate array items | `[Number]` (array of numbers) |
+| Objects | Validate properties | `{ name: String, age: Number }` |
+| RegExp | Match string patterns | `/^[a-z]+$/` |
+| `or()` | Match any schema | `or(String, Number)` |
+| `and()` | Match all schemas | `and(Date, { toJSON: Function })` |
+| `optional()` | Allow null/undefined | `optional(String)` |
+| `tuple()` | Fixed-length arrays | `tuple(Number, Number)` |
+
+### Object Validation Symbols
+
+```typescript
+import { $keys, $values, $strict } from 'ascertain';
+
+const schema = {
+  [$keys]: /^[a-z]+$/,     // All keys must match pattern
+  [$values]: Number,        // All values must be numbers
+  [$strict]: true,          // No extra properties allowed
+};
+```
+
+## Type Casting with `as`
+
+Parse and validate values from strings (useful for environment variables, query params, etc.):
+
+```typescript
+import { as } from 'ascertain';
+
+as.string('hello')           // 'hello'
+as.number('42')              // 42
+as.number('3.14')            // 3.14
+as.number('1e10')            // 10000000000
+as.number('0xFF')            // 255 (hex)
+as.number('0o77')            // 63 (octal)
+as.number('0b1010')          // 10 (binary)
+as.boolean('true')           // true
+as.boolean('1')              // true
+as.date('2024-12-31')        // Date object
+as.time('2m')                // 120000 (milliseconds)
+as.time('1h')                // 3600000
+as.array('a,b,c', ',')       // ['a', 'b', 'c']
+as.json('{"x":1}')           // { x: 1 }
+as.base64('dGVzdA==')        // 'test'
+```
+
+Invalid values return a `TypeError` instead of throwing, enabling deferred validation:
+
+```typescript
+const config = {
+  port: as.number(process.env.PORT),      // TypeError if invalid
+  host: as.string(process.env.HOST),
+};
+
+// Errors surface during schema validation with clear paths
+ascertain({ port: Number, host: String }, config, 'Config');
+```
+
+## Config Validation with `createValidator`
+
+For configuration objects, `createValidator` provides type-safe partial validation:
+
+```typescript
+import { createValidator, as } from 'ascertain';
+
+const config = {
+  app: { name: as.string(process.env.APP_NAME), port: as.number(process.env.PORT) },
+  db: { host: as.string(process.env.DB_HOST), pool: as.number(process.env.DB_POOL) },
+  redis: { url: as.string(process.env.REDIS_URL) },
+};
+
+const validate = createValidator(config, 'Config');
+
+// Each module validates only what it needs
+const { app, db } = validate({
+  app: { name: String, port: Number },
+  db: { host: String, pool: Number },
 });
-
+// app.name is typed as string
+// app.port is typed as number
+// redis is not accessible (TypeScript error)
 ```
 
-### Runtime validation
-Create data ascertain
+## Complete Example
+
 ```typescript
-import { ascertain, optional, and, or, $keys, $values, Schema, as } from 'ascertain';
+import { compile, or, optional, and, tuple, $keys, $values, $strict, as } from 'ascertain';
 
-// create data sample
-const data = {
-  number: 1,
-  string: 'string',
-  boolean: true,
-  function: () => {},
-  array: [],
-  object: {},
-  date: new Date,
-  regexp: 'regexp',
-  oneOfValue: 1,
-  arrayOfNumbers: [1,2,3,4,5],
-  objectSchema: {
-    number: 1,
+const schema = {
+  // Type validation
+  id: Number,
+  name: String,
+  active: Boolean,
+
+  // Pattern matching
+  email: /^[^@]+@[^@]+$/,
+
+  // Union types
+  status: or('pending', 'active', 'disabled'),
+
+  // Optional fields
+  nickname: optional(String),
+
+  // Nested objects
+  profile: {
+    bio: String,
+    links: [String],
   },
-  optional: null,
-  keyValue: {
-    keyOne: 1,
-    keyTwo: 2,
-    keyThree: 3,
+
+  // Combined constraints
+  createdAt: and(Date, { toISOString: Function }),
+
+  // Tuples
+  coordinates: tuple(Number, Number),
+
+  // Dynamic objects
+  metadata: {
+    [$keys]: /^[a-z_]+$/,
+    [$values]: or(String, Number),
+    [$strict]: true,
   },
-  // fault tolernat type casting
-  parsedNumber: as.number('1'),
-  parsedString: as.string('string'),
-  parsedBoolean: as.boolean('false'),
-  parsedArray: as.array('1,2,3,4,5', ','),
-  parsedJSON: as.json('{ "number": 1 }'),
-  parsedBase64: as.base64('dGVzdA=='),
-  parsedTime: as.time('2m'),
-  parsedDate: as.date('31-12-2024'),
+
+  // Parsed values
+  retryCount: as.number(process.env.RETRY_COUNT),
+  timeout: as.time(process.env.TIMEOUT),
 };
 
-// create data schema
-const schema: Schema<typeof data> = {
-  number: Number,
-  string: String,
-  boolean: Boolean,
-  function: Function,
-  array: Array,
-  object: Object,
-  date: and(Date, { toJSON: Function }),
-  regexp: /regexp/,
-  oneOfValue: or(1, 2, 3),
-  arrayOfNumbers: [Number],
-  objectSchema: {
-    number: Number,
-  },
-  optional: optional({
-    number: Number,
-  }),
-  keyValue: {
-    [$keys]: /^key[A-Z]/,
-    [$values]: Number
-  },
-  parsedNumber: Number,
-  parsedString: String,
-  parsedBoolean: Boolean,
-  parsedArray: [String],
-  parsedJSON: {
-    number: 1,
-  },
-  parsedBase64: String,
-  parsedTime: 2 * 60 * 1000, // two minutes
-  parsedDate: Date,
-};
+const validate = compile(schema, 'AppConfig');
 
-// validate
-const validate = ascertain<typeof data>(schema, data, '[DATA]');
-```
-
-### Benchmark VS zod and ajv
-```
-⭐ Script ajv-vs-zod-vs-ascertain.js
-  ⇶ Suite ajv vs zod vs ascertain
-    ➤ Perform benchmark
-      ✓ Measure 500000 zod static schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
-        │ 0.000699 │ 0.000788 │ 0.000996 │ 0.001624 │ 462.602373 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
-      ✓ Measure 500000 zod dynamic schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬─────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total       │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼─────────────┼────────┤
-        │ 0.006248 │ 0.006918 │ 0.007524 │ 0.016948 │ 3780.465563 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴─────────────┴────────┘
-      ✓ Measure 500000 ascertain static schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
-        │ 0.000063 │ 0.000071 │ 0.000098 │ 0.000267 │ 41.673271 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
-      ✓ Measure 500000 ascertain dynamic schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
-        │ 0.000367 │ 0.000415 │ 0.000525 │ 0.001055 │ 239.078129 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
-      ✓ Measure 500000 ajv compiled schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
-        │ 0.000063 │ 0.000072 │ 0.000124 │ 0.000307 │ 44.542936 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
+// Throws TypeError with detailed path on validation failure
+validate(data);
 ```
 
 ## License
-License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2019-2025 Ivan Zakharchanka
+
+[The MIT License](http://opensource.org/licenses/MIT)
+
+Copyright (c) 2019-2026 Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200
