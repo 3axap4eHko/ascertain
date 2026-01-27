@@ -12,135 +12,212 @@ Zero-dependency, high-performance schema validator for Node.js and browsers.
 
 ## Features
 
-- **Zero dependencies**: Minimal footprint, no external dependencies
-- **High performance**: Compiles schemas to optimized JavaScript functions
-- **Type-safe**: Full TypeScript support with type inference
-- **Flexible schemas**: Supports AND, OR, optional, and tuple operators
-- **Type casting**: Built-in parsers for numbers, dates, JSON, base64, and more
-- **Object validation**: Validate keys and values with `$keys`, `$values`, and `$strict`
-- **Detailed errors**: Clear error messages with paths for debugging
+- **Zero dependencies** - Minimal footprint, no external dependencies
+- **High performance** - Compiles schemas to optimized JS functions (~6x faster than dynamic validation)
+- **Type-safe** - Full TypeScript support with type inference
+- **Flexible schemas** - AND, OR, optional, tuple operators
+- **Type casting** - Built-in parsers for numbers (hex, octal, binary), dates, JSON, base64
+- **Object validation** - Validate keys/values with `$keys`, `$values`, `$strict`
+- **Partial validation** - `createValidator` validates subsets with type narrowing
+- **Detailed errors** - Clear error messages with paths for debugging
 
-## Installation
+## Install
 
 ```bash
 npm install ascertain
-# or
-pnpm add ascertain
 ```
 
 ## Quick Start
 
 ```typescript
-import { ascertain, compile, or, optional } from 'ascertain';
+import { ascertain, or, optional } from 'ascertain';
 
-// Define a schema
-const userSchema = {
+ascertain({
   name: String,
   age: Number,
+  role: or('admin', 'user'),
   email: optional(String),
-  role: or('admin', 'user', 'guest'),
-};
-
-// Validate data (throws on invalid)
-ascertain(userSchema, userData, 'User');
+}, userData, 'User');
 ```
 
 ## Performance
 
-Ascertain compiles schemas into optimized JavaScript functions at runtime. This compilation step generates specialized validation code that runs significantly faster than interpreting schemas on each validation.
-
-**For best performance, compile schemas once and reuse the validator:**
+Ascertain compiles schemas into optimized JavaScript functions. Compiled validators run **~6x faster** than dynamic validation.
 
 ```typescript
 import { compile } from 'ascertain';
 
-// Compile once at startup
+// Compile once
 const validateUser = compile(userSchema, 'User');
 
-// Reuse for each validation (no recompilation)
+// Validate many (no recompilation)
 validateUser(user1);
 validateUser(user2);
 ```
 
-Use `ascertain()` for one-off validations where convenience matters more than performance. Use `compile()` when validating the same schema repeatedly (e.g., API request handlers).
+| When to use | Function | Speed |
+|-------------|----------|-------|
+| Repeated validation (API handlers, loops) | `compile()` | Fastest |
+| One-off validation | `ascertain()` | Convenient |
 
 ### Benchmark
 
-| Library | Operations/sec | Relative Speed |
-|---------|----------------|----------------|
-| **Ascertain** | 58,962,264 | **1.0x (fastest)** |
-| AJV | 42,204,777 | 0.72x |
-| Zod | 32,309,133 | 0.55x |
+| Library | Ops/sec | Relative |
+|---------|---------|----------|
+| **Ascertain** | 58.9M | 1.0x |
+| AJV | 42.2M | 0.72x |
+| Zod | 32.3M | 0.55x |
 
-```bash
-pnpm bench
-```
+## Schema Reference
 
-## Schema Types
+| Schema | Validates | Example |
+|--------|-----------|---------|
+| `String`, `Number`, `Boolean` | Type check | `{ age: Number }` |
+| `Date`, `Array`, `Object` | Instance check | `{ created: Date }` |
+| `Function` | Any callable | `{ handler: Function }` |
+| Primitives | Exact value | `{ status: 'active' }` |
+| RegExp | Pattern match | `{ email: /^.+@.+$/ }` |
+| `[Schema]` | Array of type | `{ tags: [String] }` |
+| `{ key: Schema }` | Object shape | `{ user: { name: String } }` |
+| `or(a, b, ...)` | Any match | `or(String, Number)` |
+| `and(a, b, ...)` | All match | `and(Date, { toJSON: Function })` |
+| `optional(s)` | Nullable | `optional(String)` |
+| `tuple(a, b)` | Fixed array | `tuple(Number, Number)` |
 
-| Schema | Description | Example |
-|--------|-------------|---------|
-| Primitives | Match exact values | `42`, `'active'`, `true`, `null` |
-| Constructors | Validate by type | `String`, `Number`, `Boolean`, `Date` |
-| Arrays | Validate array items | `[Number]` (array of numbers) |
-| Objects | Validate properties | `{ name: String, age: Number }` |
-| RegExp | Match string patterns | `/^[a-z]+$/` |
-| `or()` | Match any schema | `or(String, Number)` |
-| `and()` | Match all schemas | `and(Date, { toJSON: Function })` |
-| `optional()` | Allow null/undefined | `optional(String)` |
-| `tuple()` | Fixed-length arrays | `tuple(Number, Number)` |
-
-### Object Validation Symbols
+### Special Symbols
 
 ```typescript
 import { $keys, $values, $strict } from 'ascertain';
 
 const schema = {
-  [$keys]: /^[a-z]+$/,     // All keys must match pattern
-  [$values]: Number,        // All values must be numbers
-  [$strict]: true,          // No extra properties allowed
+  [$keys]: /^[a-z]+$/,   // Validate all keys
+  [$values]: Number,      // Validate all values
+  [$strict]: true,        // No extra properties
 };
 ```
 
-## Type Casting with `as`
+## Type Casting
 
-Parse and validate values from strings (useful for environment variables, query params, etc.):
+Parse strings into typed values (environment variables, query params):
 
 ```typescript
 import { as } from 'ascertain';
 
-as.string('hello')           // 'hello'
-as.number('42')              // 42
-as.number('3.14')            // 3.14
-as.number('1e10')            // 10000000000
-as.number('0xFF')            // 255 (hex)
-as.number('0o77')            // 63 (octal)
-as.number('0b1010')          // 10 (binary)
-as.boolean('true')           // true
-as.boolean('1')              // true
-as.date('2024-12-31')        // Date object
-as.time('2m')                // 120000 (milliseconds)
-as.time('1h')                // 3600000
-as.array('a,b,c', ',')       // ['a', 'b', 'c']
-as.json('{"x":1}')           // { x: 1 }
-as.base64('dGVzdA==')        // 'test'
+as.number('42')        // 42
+as.number('3.14')      // 3.14
+as.number('0xFF')      // 255 (hex)
+as.number('0o77')      // 63 (octal)
+as.number('0b1010')    // 10 (binary)
+as.number('1e10')      // 10000000000
+
+as.boolean('true')     // true
+as.boolean('1')        // true
+
+as.time('500ms')       // 500
+as.time('30s')         // 30000
+as.time('5m')          // 300000
+as.time('2h')          // 7200000
+as.time('1d')          // 86400000
+
+as.date('2024-12-31')  // Date object
+as.array('a,b,c', ',') // ['a', 'b', 'c']
+as.json('{"x":1}')     // { x: 1 }
+as.base64('dGVzdA==')  // 'test'
 ```
 
-Invalid values return a `TypeError` instead of throwing, enabling deferred validation:
+Invalid values return `TypeError` for deferred validation:
 
 ```typescript
 const config = {
-  port: as.number(process.env.PORT),      // TypeError if invalid
+  port: as.number(process.env.PORT),  // TypeError if invalid
   host: as.string(process.env.HOST),
 };
 
-// Errors surface during schema validation with clear paths
+// Errors surface with clear paths
 ascertain({ port: Number, host: String }, config, 'Config');
+// → "Invalid value undefined for path Config.port..."
 ```
 
-## Config Validation with `createValidator`
+## Patterns
 
-For configuration objects, `createValidator` provides type-safe partial validation:
+### Batch Validation
+
+Compile once, validate many:
+
+```typescript
+const validateUser = compile(userSchema, 'User');
+
+const results = users.map((user, i) => {
+  try {
+    validateUser(user);
+    return { index: i, valid: true };
+  } catch (e) {
+    return { index: i, valid: false, error: e.message };
+  }
+});
+```
+
+### Conditional Rules
+
+Use `or()` and `and()` for complex conditions:
+
+```typescript
+const schema = {
+  type: or('email', 'sms'),
+  // Conditional: email requires address, sms requires phone
+  contact: or(
+    and({ type: 'email' }, { address: String }),
+    and({ type: 'sms' }, { phone: String }),
+  ),
+};
+```
+
+### Schema Composition
+
+Build schemas from reusable parts:
+
+```typescript
+const addressSchema = {
+  street: String,
+  city: String,
+  zip: /^\d{5}$/,
+};
+
+const personSchema = {
+  name: String,
+  address: addressSchema,
+};
+
+const companySchema = {
+  name: String,
+  headquarters: addressSchema,
+  employees: [personSchema],
+};
+```
+
+### Versioned Schemas
+
+Version schemas as modules:
+
+```typescript
+// schemas/user.v1.ts
+export const userSchemaV1 = { name: String, email: String };
+
+// schemas/user.v2.ts
+export const userSchemaV2 = {
+  ...userSchemaV1,
+  phone: optional(String),
+  createdAt: Date,
+};
+
+// api/handler.ts
+import { userSchemaV2 } from './schemas/user.v2';
+const validate = compile(userSchemaV2, 'User');
+```
+
+### Config Validation
+
+Validate only what each module needs:
 
 ```typescript
 import { createValidator, as } from 'ascertain';
@@ -148,19 +225,22 @@ import { createValidator, as } from 'ascertain';
 const config = {
   app: { name: as.string(process.env.APP_NAME), port: as.number(process.env.PORT) },
   db: { host: as.string(process.env.DB_HOST), pool: as.number(process.env.DB_POOL) },
-  redis: { url: as.string(process.env.REDIS_URL) },
+  cache: { ttl: as.time(process.env.CACHE_TTL) },
 };
 
 const validate = createValidator(config, 'Config');
 
 // Each module validates only what it needs
-const { app, db } = validate({
-  app: { name: String, port: Number },
+const { db } = validate({
   db: { host: String, pool: Number },
 });
-// app.name is typed as string
-// app.port is typed as number
-// redis is not accessible (TypeScript error)
+
+db.host;   // string - validated and typed
+db.pool;   // number - validated and typed
+// db.xxx  // TypeScript error - property doesn't exist
+
+// cache not validated = not accessible
+// cache.ttl  // TypeScript error - cache not in returned type
 ```
 
 ## Complete Example
@@ -169,55 +249,37 @@ const { app, db } = validate({
 import { compile, or, optional, and, tuple, $keys, $values, $strict, as } from 'ascertain';
 
 const schema = {
-  // Type validation
   id: Number,
   name: String,
-  active: Boolean,
-
-  // Pattern matching
   email: /^[^@]+@[^@]+$/,
+  status: or('active', 'inactive', 'pending'),
+  role: optional(or('admin', 'user')),
 
-  // Union types
-  status: or('pending', 'active', 'disabled'),
-
-  // Optional fields
-  nickname: optional(String),
-
-  // Nested objects
   profile: {
-    bio: String,
-    links: [String],
+    bio: optional(String),
+    avatar: optional(String),
   },
 
-  // Combined constraints
-  createdAt: and(Date, { toISOString: Function }),
-
-  // Tuples
-  coordinates: tuple(Number, Number),
-
-  // Dynamic objects
-  metadata: {
+  settings: {
     [$keys]: /^[a-z_]+$/,
-    [$values]: or(String, Number),
+    [$values]: or(String, Number, Boolean),
     [$strict]: true,
   },
 
-  // Parsed values
-  retryCount: as.number(process.env.RETRY_COUNT),
+  coordinates: optional(tuple(Number, Number)),
+  createdAt: and(Date, { toISOString: Function }),
+
+  retries: as.number(process.env.MAX_RETRIES),
   timeout: as.time(process.env.TIMEOUT),
 };
 
 const validate = compile(schema, 'AppConfig');
-
-// Throws TypeError with detailed path on validation failure
 validate(data);
 ```
 
 ## License
 
-[The MIT License](http://opensource.org/licenses/MIT)
-
-Copyright (c) 2019-2026 Ivan Zakharchanka
+[MIT](http://opensource.org/licenses/MIT) - Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200
