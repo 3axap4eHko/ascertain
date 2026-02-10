@@ -52,9 +52,9 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^24.10.12",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
-    "@typescript-eslint/typescript-estree": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^8.55.0",
+    "@typescript-eslint/parser": "^8.55.0",
+    "@typescript-eslint/typescript-estree": "^8.55.0",
     "@vitest/coverage-v8": "^4.0.18",
     "@vuepress/bundler-vite": "2.0.0-rc.26",
     "@vuepress/theme-default": "2.0.0-rc.122",
@@ -70,11 +70,11 @@
     "sass-embedded": "^1.97.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.54.0",
+    "typescript-eslint": "^8.55.0",
     "vitest": "^4.0.18",
-    "vue": "^3.5.27",
+    "vue": "^3.5.28",
     "vuepress": "2.0.0-rc.26",
     "zod": "^4.3.6"
   },
-  "packageManager": "pnpm@10.29.1"
+  "packageManager": "pnpm@10.29.2"
 }
