@@ -15,11 +15,12 @@ Zero-dependency, high-performance schema validator for Node.js and browsers.
 - **Zero dependencies** - Minimal footprint, no external dependencies
 - **High performance** - Compiles schemas to optimized JS functions (~6x faster than dynamic validation)
 - **Type-safe** - Full TypeScript support with type inference
-- **Flexible schemas** - AND, OR, optional, tuple operators
+- **Flexible schemas** - AND, OR, optional, tuple, discriminated operators
 - **Type casting** - Built-in parsers for numbers (hex, octal, binary), dates, JSON, base64
 - **Object validation** - Validate keys/values with `$keys`, `$values`, `$strict`
 - **Partial validation** - `createValidator` validates subsets with type narrowing
 - **Detailed errors** - Clear error messages with paths for debugging
+- **Standard Schema v1** - Interoperable with tRPC, TanStack Form, and other ecosystem tools
 
 ## Install
 
@@ -37,7 +38,7 @@ ascertain({
   age: Number,
   role: or('admin', 'user'),
   email: optional(String),
-}, userData, 'User');
+}, userData);
 ```
 
 ## Performance
@@ -48,7 +49,7 @@ Ascertain compiles schemas into optimized JavaScript functions. Compiled validat
 import { compile } from 'ascertain';
 
 // Compile once
-const validateUser = compile(userSchema, 'User');
+const validateUser = compile(userSchema);
 
 // Validate many (no recompilation)
 validateUser(user1);
@@ -62,11 +63,13 @@ validateUser(user2);
 
 ### Benchmark
 
-| Library | Ops/sec | Relative |
-|---------|---------|----------|
-| **Ascertain** | 58.9M | 1.0x |
-| AJV | 42.2M | 0.72x |
-| Zod | 32.3M | 0.55x |
+| Library | Mode | Valid (ops/s) | Invalid (ops/s) |
+|---------|------|---------------|-----------------|
+| **Ascertain** | first-error | 80M | 41M |
+| **Ascertain** | all-errors | 80M | 25M |
+| AJV | first-error | 52M | 35M |
+| AJV | all-errors | 52M | 20M |
+| Zod | all-errors | 34M | 77K |
 
 ## Schema Reference
 
@@ -83,6 +86,7 @@ validateUser(user2);
 | `and(a, b, ...)` | All match | `and(Date, { toJSON: Function })` |
 | `optional(s)` | Nullable | `optional(String)` |
 | `tuple(a, b)` | Fixed array | `tuple(Number, Number)` |
+| `discriminated(schemas, key)` | Tagged union | `discriminated([{ type: 'a' }, { type: 'b' }], 'type')` |
 
 ### Special Symbols
 
@@ -134,8 +138,8 @@ const config = {
 };
 
 // Errors surface with clear paths
-ascertain({ port: Number, host: String }, config, 'Config');
-// → "Invalid value undefined for path Config.port..."
+ascertain({ port: Number, host: String }, config);
+// → TypeError: "Invalid value undefined, expected non-nullable"
 ```
 
 ## Patterns
@@ -145,17 +149,38 @@ ascertain({ port: Number, host: String }, config, 'Config');
 Compile once, validate many:
 
 ```typescript
-const validateUser = compile(userSchema, 'User');
+const validateUser = compile(userSchema);
 
 const results = users.map((user, i) => {
-  try {
-    validateUser(user);
+  if (validateUser(user)) {
     return { index: i, valid: true };
-  } catch (e) {
-    return { index: i, valid: false, error: e.message };
   }
+  return { index: i, valid: false, error: validateUser.issues[0].message };
 });
 ```
+
+### Discriminated Unions
+
+Use `discriminated()` for efficient tagged union validation. Instead of trying each variant like `or()`, it checks the discriminant field first and only validates the matching variant:
+
+```typescript
+import { compile, discriminated } from 'ascertain';
+
+const messageSchema = discriminated([
+  { type: 'email', address: String },
+  { type: 'sms', phone: String },
+  { type: 'push', token: String },
+], 'type');
+
+const validate = compile(messageSchema);
+
+validate({ type: 'email', address: 'user@example.com' }); // true
+validate({ type: 'sms', phone: '123456' });                // true
+validate({ type: 'push', token: 123 });                    // false
+validate({ type: 'unknown' });                             // false
+```
+
+Discriminant values must be string, number, or boolean literals.
 
 ### Conditional Rules
 
@@ -212,7 +237,7 @@ export const userSchemaV2 = {
 
 // api/handler.ts
 import { userSchemaV2 } from './schemas/user.v2';
-const validate = compile(userSchemaV2, 'User');
+const validate = compile(userSchemaV2);
 ```
 
 ### Config Validation
@@ -228,7 +253,7 @@ const config = {
   cache: { ttl: as.time(process.env.CACHE_TTL) },
 };
 
-const validate = createValidator(config, 'Config');
+const validate = createValidator(config);
 
 // Each module validates only what it needs
 const { db } = validate({
@@ -241,6 +266,55 @@ db.pool;   // number - validated and typed
 
 // cache not validated = not accessible
 // cache.ttl  // TypeScript error - cache not in returned type
+```
+
+## Compile Options
+
+By default `compile()` stops at the first validation error (fastest for invalid data). Pass `{ allErrors: true }` to collect all errors:
+
+```typescript
+import { compile } from 'ascertain';
+
+const schema = { name: String, age: Number, active: Boolean };
+
+// First-error mode (default) - stops at first failure
+const validate = compile(schema);
+if (!validate({ name: 123, age: 'bad', active: 'no' })) {
+  console.log(validate.issues.length); // 1
+  console.log(validate.issues[0].path); // ['name']
+}
+
+// All-errors mode - collects every failure
+const validateAll = compile(schema, { allErrors: true });
+if (!validateAll({ name: 123, age: 'bad', active: 'no' })) {
+  console.log(validateAll.issues.length); // 3
+}
+```
+
+## Standard Schema
+
+Wrap a schema for [Standard Schema v1](https://standardschema.dev/) compliance, enabling interoperability with tRPC, TanStack Form, and other ecosystem libraries:
+
+```typescript
+import { standardSchema, or, optional } from 'ascertain';
+
+const userValidator = standardSchema({
+  name: String,
+  age: Number,
+  role: or('admin', 'user'),
+  email: optional(String),
+});
+
+// Use as regular validator (throws on error)
+userValidator({ name: 'Alice', age: 30, role: 'admin' });
+
+// Use Standard Schema interface (returns result object)
+const result = userValidator['~standard'].validate(unknownData);
+if (result.issues) {
+  console.log(result.issues);
+} else {
+  console.log(result.value);
+}
 ```
 
 ## Complete Example
@@ -273,8 +347,10 @@ const schema = {
   timeout: as.time(process.env.TIMEOUT),
 };
 
-const validate = compile(schema, 'AppConfig');
-validate(data);
+const validate = compile(schema);
+if (!validate(data)) {
+  console.error(validate.issues);
+}
 ```
 
 ## License

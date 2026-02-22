@@ -1,23 +1,4 @@
 /**
- * Abstract base class for schema operators.
- *
- * Provides a common constructor that enforces having at least one schema.
- *
- * @template T - The type of data the operator validates.
- * @abstract
- * @internal
- */
-abstract class Operator<T> {
-  constructor(public readonly schemas: Schema<T>[]) {
-    if (schemas.length === 0) {
-      throw new TypeError(`Operation schema ${this.constructor.name} must have at least one element`);
-    }
-  }
-}
-
-// https://standardschema.dev/
-
-/**
  * Symbol for validating object keys against a schema.
  */
 export const $keys = Symbol.for('@@keys');
@@ -29,6 +10,66 @@ export const $values = Symbol.for('@@values');
  * Symbol for enforcing strict object validation (no extra properties allowed).
  */
 export const $strict = Symbol.for('@@strict');
+
+const $op = Symbol.for('@@op');
+
+const OR = Symbol.for('@@or');
+const AND = Symbol.for('@@and');
+const OPTIONAL = Symbol.for('@@optional');
+const TUPLE = Symbol.for('@@tuple');
+const DISCRIMINATED = Symbol.for('@@discriminated');
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+interface OrShape<T> {
+  readonly schemas: Schema<T>[];
+  readonly [$op]: typeof OR;
+}
+interface AndShape<T> {
+  readonly schemas: Schema<T>[];
+  readonly [$op]: typeof AND;
+}
+interface OptionalShape<T> {
+  readonly schemas: Schema<T>[];
+  readonly [$op]: typeof OPTIONAL;
+}
+interface TupleShape<T> {
+  readonly schemas: Schema<T>[];
+  readonly [$op]: typeof TUPLE;
+}
+interface DiscriminatedShape<T> {
+  readonly schemas: Schema<T>[];
+  readonly [$op]: typeof DISCRIMINATED;
+  readonly key: string;
+}
+
+type Tagged<T> = OrShape<T> | AndShape<T> | OptionalShape<T> | TupleShape<T> | DiscriminatedShape<T>;
+
+const OrCtor = function <T>(this: OrShape<T>, schemas: Schema<T>[]) {
+  (this as Mutable<OrShape<T>>).schemas = schemas;
+} as unknown as { new <T>(schemas: Schema<T>[]): OrShape<T>; prototype: { [$op]: typeof OR } };
+OrCtor.prototype[$op] = OR;
+
+const AndCtor = function <T>(this: AndShape<T>, schemas: Schema<T>[]) {
+  (this as Mutable<AndShape<T>>).schemas = schemas;
+} as unknown as { new <T>(schemas: Schema<T>[]): AndShape<T>; prototype: { [$op]: typeof AND } };
+AndCtor.prototype[$op] = AND;
+
+const OptionalCtor = function <T>(this: OptionalShape<T>, schema: Schema<T>) {
+  (this as Mutable<OptionalShape<T>>).schemas = [schema];
+} as unknown as { new <T>(schema: Schema<T>): OptionalShape<T>; prototype: { [$op]: typeof OPTIONAL } };
+OptionalCtor.prototype[$op] = OPTIONAL;
+
+const TupleCtor = function <T>(this: TupleShape<T>, schemas: Schema<T>[]) {
+  (this as Mutable<TupleShape<T>>).schemas = schemas;
+} as unknown as { new <T>(schemas: Schema<T>[]): TupleShape<T>; prototype: { [$op]: typeof TUPLE } };
+TupleCtor.prototype[$op] = TUPLE;
+
+const DiscriminatedCtor = function <T>(this: DiscriminatedShape<T>, schemas: Schema<T>[], key: string) {
+  (this as Mutable<DiscriminatedShape<T>>).schemas = schemas;
+  (this as Mutable<DiscriminatedShape<T>>).key = key;
+} as unknown as { new <T>(schemas: Schema<T>[], key: string): DiscriminatedShape<T>; prototype: { [$op]: typeof DISCRIMINATED } };
+DiscriminatedCtor.prototype[$op] = DISCRIMINATED;
 
 /**
  * Represents a schema for validating data.
@@ -44,167 +85,58 @@ export type Schema<T> =
       ? Schema<A>[] | unknown
       : unknown;
 
-class Or<T> extends Operator<T> {}
 /**
  * Operator for validating data against any of the provided schemas (logical OR).
- *
- * Creates a schema that accepts data matching any one of the provided schemas.
- * This is useful for creating union types or alternative validation paths.
- *
- * @template T - The type of data the operator validates.
- * @param schemas - Multiple schemas where at least one must match the data.
- * @returns A schema that validates data against any of the provided schemas.
- *
- * @example
- * ```typescript
- * import { or, ascertain } from 'ascertain';
- *
- * // Create a schema that accepts either a string or number
- * const stringOrNumber = or(String, Number);
- *
- * ascertain(stringOrNumber, "hello", "value"); // ✓ Valid
- * ascertain(stringOrNumber, 42, "value");      // ✓ Valid
- * ascertain(stringOrNumber, true, "value");    // ✗ Throws error
- *
- * // Union of literal values
- * const statusSchema = or('pending', 'completed', 'failed');
- * ascertain(statusSchema, 'pending', "status"); // ✓ Valid
- *
- * // Complex schema combinations
- * const userIdSchema = or(Number, { id: Number, temp: Boolean });
- * ascertain(userIdSchema, 123, "userId");                    // ✓ Valid
- * ascertain(userIdSchema, { id: 456, temp: true }, "userId"); // ✓ Valid
- * ```
  */
-export const or = <T>(...schemas: Schema<T>[]) => new Or(schemas);
+export const or = <T>(...schemas: Schema<T>[]): OrShape<T> => {
+  if (schemas.length === 0) throw new TypeError('Operator requires at least one schema');
+  return new OrCtor(schemas);
+};
 
-class And<T> extends Operator<T> {}
 /**
  * Operator for validating data against all provided schemas (logical AND).
- *
- * Creates a schema that requires data to match every one of the provided schemas.
- * This is useful for combining multiple validation requirements or adding constraints.
- *
- * @template T - The type of data the operator validates.
- * @param schemas - Multiple schemas that all must match the data.
- * @returns A schema that validates data against all of the provided schemas.
- *
- * @example
- * ```typescript
- * import { and, ascertain } from 'ascertain';
- *
- * // Combine object schema with additional constraints
- * const userSchema = and(
- *   { name: String, age: Number },
- *   { age: Number } // Additional constraint
- * );
- *
- * ascertain(userSchema, { name: "John", age: 25 }, "user"); // ✓ Valid
- *
- * // Ensure an object is both a Date and has specific methods
- * const validDateSchema = and(Date, { toISOString: Function });
- * ascertain(validDateSchema, new Date(), "date"); // ✓ Valid
- *
- * ```
  */
-export const and = <T>(...schemas: Schema<T>[]) => new And(schemas);
+export const and = <T>(...schemas: Schema<T>[]): AndShape<T> => {
+  if (schemas.length === 0) throw new TypeError('Operator requires at least one schema');
+  return new AndCtor(schemas);
+};
 
-class Optional<T> extends Operator<T> {
-  constructor(schema: Schema<T>) {
-    super([schema]);
-  }
-}
 /**
  * Operator for making a schema optional (nullable).
- *
- * Creates a schema that accepts the provided schema or null/undefined values.
- * This is useful for optional object properties or nullable fields.
- *
- * @template T - The type of data the operator validates.
- * @param schema - The schema to make optional.
- * @returns A schema that validates data against the provided schema or accepts null/undefined.
- *
- * @example
- * ```typescript
- * import { optional, ascertain } from 'ascertain';
- *
- * // Optional string field
- * const userSchema = {
- *   name: String,
- *   nickname: optional(String),
- *   age: Number
- * };
- *
- * // All of these are valid
- * ascertain(userSchema, {
- *   name: "John",
- *   nickname: "Johnny",
- *   age: 30
- * }, "user"); // ✓ Valid
- *
- * ascertain(userSchema, {
- *   name: "Jane",
- *   nickname: null,
- *   age: 25
- * }, "user"); // ✓ Valid
- *
- * ascertain(userSchema, {
- *   name: "Bob",
- *   age: 35
- *   // nickname is undefined
- * }, "user"); // ✓ Valid
- *
- * // Optional complex objects
- * const profileSchema = {
- *   id: Number,
- *   settings: optional({
- *     theme: String,
- *     notifications: Boolean
- *   })
- * };
- * ```
  */
-export const optional = <T>(schema: Schema<T>) => new Optional(schema);
+export const optional = <T>(schema: Schema<T>): OptionalShape<T> => new OptionalCtor(schema);
 
-class Tuple<T> extends Operator<T> {}
 /**
  * Operator for validating data against a fixed-length tuple of schemas.
+ */
+export const tuple = <T>(...schemas: Schema<T>[]): TupleShape<T> => {
+  if (schemas.length === 0) throw new TypeError('Operator requires at least one schema');
+  return new TupleCtor(schemas);
+};
+
+/**
+ * Operator for validating data against a discriminated union.
  *
- * Creates a schema that validates arrays with a specific length and type for each position.
- * This is useful for coordinate pairs, RGB values, or any fixed-structure data.
+ * Optimizes validation by checking the discriminant field first and only
+ * validating the matching variant. More efficient than `or()` for unions
+ * where each variant has a common field with a unique literal value.
  *
- * @template T - The type of data the operator validates (a tuple of types).
- * @param schemas - Schemas for each position in the tuple, in order.
- * @returns A schema that validates data as a tuple with the specified structure.
+ * @param schemas - Array of object schemas, each with a discriminant field containing a literal value.
+ * @param key - The name of the discriminant field present in all variants.
  *
  * @example
  * ```typescript
- * import { tuple, ascertain } from 'ascertain';
- *
- * // 2D coordinate tuple
- * const pointSchema = tuple(Number, Number);
- * ascertain(pointSchema, [10, 20], "point"); // ✓ Valid
- * ascertain(pointSchema, [1.5, 2.7], "point"); // ✓ Valid
- * ascertain(pointSchema, [10], "point"); // ✗ Throws error (too short)
- * ascertain(pointSchema, [10, 20, 30], "point"); // ✗ Throws error (too long)
- *
- * // RGB color tuple
- * const colorSchema = tuple(Number, Number, Number);
- * ascertain(colorSchema, [255, 128, 0], "color"); // ✓ Valid
- *
- * // Mixed type tuple
- * const userInfoSchema = tuple(String, Number, Boolean);
- * ascertain(userInfoSchema, ["Alice", 25, true], "userInfo"); // ✓ Valid
- *
- * // Nested tuple
- * const lineSchema = tuple(
- *   tuple(Number, Number), // start point
- *   tuple(Number, Number)  // end point
- * );
- * ascertain(lineSchema, [[0, 0], [10, 10]], "line"); // ✓ Valid
+ * const messageSchema = discriminated([
+ *   { type: 'email', address: String },
+ *   { type: 'sms', phone: String },
+ *   { type: 'push', token: String },
+ * ], 'type');
  * ```
  */
-export const tuple = <T>(...schemas: Schema<T>[]) => new Tuple(schemas);
+export const discriminated = <T>(schemas: Schema<T>[], key: string): DiscriminatedShape<T> => {
+  if (schemas.length === 0) throw new TypeError('discriminated requires at least one schema');
+  return new DiscriminatedCtor(schemas, key);
+};
 
 /**
  * Decodes a base64-encoded string to UTF-8.
@@ -214,7 +146,9 @@ export const tuple = <T>(...schemas: Schema<T>[]) => new Tuple(schemas);
  * @param value - The base64-encoded string to decode.
  * @returns The decoded UTF-8 string.
  */
-export const fromBase64 = typeof Buffer === 'undefined' ? (value: string) => atob(value) : (value: string) => Buffer.from(value, 'base64').toString('utf-8');
+export const fromBase64 =
+  /* c8 ignore next */
+  typeof Buffer === 'undefined' ? (value: string) => atob(value) : (value: string) => Buffer.from(value, 'base64').toString('utf-8');
 
 const MULTIPLIERS = {
   ms: 1,
@@ -277,7 +211,7 @@ export const as = {
       return value[0] === '-' ? -result : result;
     }
 
-    const result = value.includes('.') || value.includes('e') || value.includes('E') ? parseFloat(value) : parseInt(value, 10);
+    const result = value.trim() ? Number(value) : NaN;
     return Number.isNaN(result) ? asError(`Invalid value ${value}, expected a valid number`) : result;
   },
   /**
@@ -389,232 +323,387 @@ class Context {
   }
 }
 
-const codeGenCollectErrors = (errorsAlias: string, code: string, extra: string = '') => `try {${code}} catch (e) {${errorsAlias}.push(e.message);${extra}}`;
-const codeGenExpectNoErrors = (errorsAlias: string) => `if (${errorsAlias}.length !== 0) { throw new TypeError(${errorsAlias}.join('\\n')); }`;
-const codeGenExpectNonError = (valueAlias: string, path: string) =>
-  `if (${valueAlias} instanceof Error) { throw new TypeError(\`\${${valueAlias}.message} for path "${path}".\`); }`;
-const codeGenExpectNonNullable = (valueAlias: string, path: string) =>
-  `if (${valueAlias} === null || ${valueAlias} === undefined) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected non-nullable.\`); }`;
-const codeGenExpectObject = (valueAlias: string, path: string, instanceOf: string) =>
-  `if (typeof ${valueAlias} !== 'object') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected an instance of ${instanceOf}\`); }`;
-const codeGenExpectArray = (valueAlias: string, path: string) =>
-  `if (!Array.isArray(${valueAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}.constructor?.name} for path "${path}", expected an instance of Array.\`); }`;
+type Mode =
+  | { fast: true; onFail?: string }
+  | { fast: false; firstError: true; issues: string; path: PropertyKey[]; pathExpr: string }
+  | { fast: false; firstError: false; issues: string; path: PropertyKey[]; pathExpr: string };
 
-const codeGen = <T>(schema: Schema<T>, context: Context, valuePath: string, path: string): string => {
-  if (schema instanceof And) {
-    const valueAlias = context.unique('v');
-    const errorsAlias = context.unique('err');
-    const code = schema.schemas.map((s) => `try { ${codeGen(s, context, valueAlias, path)} } catch (e) { ${errorsAlias}.push(e.message); }`).join('\n');
-    return `// And
-  const ${errorsAlias} = [];
-  const ${valueAlias} = ${valuePath};
-  ${code}
-  ${codeGenExpectNoErrors(errorsAlias)}
-`;
-  } else if (schema instanceof Or) {
-    const valueAlias = context.unique('v');
-    const errorsAlias = context.unique('err');
-    const code = schema.schemas
-      .map((s) => codeGen(s, context, valueAlias, path))
-      .reduceRight((result, code) => codeGenCollectErrors(errorsAlias, code, result), codeGenExpectNoErrors(errorsAlias));
-    return `// Or
-const ${errorsAlias} = [];
-const ${valueAlias} = ${valuePath};
-${code}
-    `;
-  } else if (schema instanceof Optional) {
-    const valueAlias = context.unique('v');
-    return `// Optional
-const ${valueAlias} = ${valuePath};
-if (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen(schema.schemas[0], context, valueAlias, path)} }
-`;
-  } else if (schema instanceof Tuple) {
-    const valueAlias = context.unique('v');
-    const errorsAlias = context.unique('err');
-    const code: string[] = [
-      '// Tuple',
-      `const ${valueAlias} = ${valuePath};`,
-      `const ${errorsAlias} = [];`,
-      codeGenExpectNonNullable(valueAlias, path),
-      codeGenExpectObject(valueAlias, path, 'Array'),
-      codeGenExpectArray(valueAlias, path),
-      `if (${valueAlias}.length !== ${schema.schemas.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.schemas.length}.\`); }`,
-      ...schema.schemas.map((s, idx) => codeGenCollectErrors(errorsAlias, codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`))),
-      codeGenExpectNoErrors(errorsAlias),
-    ];
-    return code.join('\n');
-  } else if (typeof schema === 'function') {
-    const valueAlias = context.unique('v');
-    const code: string[] = [`const ${valueAlias} = ${valuePath};`, codeGenExpectNonNullable(valueAlias, path)];
-    if ((schema as unknown) !== Error && !(schema?.prototype instanceof Error)) {
-      code.push(codeGenExpectNonError(valueAlias, path));
-    }
+const isTagged = (schema: unknown): schema is Tagged<unknown> => (schema as Tagged<unknown>)?.[$op] !== undefined;
 
-    const name = (schema as { name?: string })?.name;
-    const primitiveType =
-      name === 'String'
-        ? 'string'
-        : name === 'Number'
-          ? 'number'
-          : name === 'Boolean'
-            ? 'boolean'
-            : name === 'BigInt'
-              ? 'bigint'
-              : name === 'Symbol'
-                ? 'symbol'
-                : null;
+const childMode = (mode: Exclude<Mode, { fast: true }>, key: PropertyKey | { dynamic: string }): Mode => {
+  if (typeof key === 'object' && 'dynamic' in key) {
+    return {
+      fast: false,
+      firstError: mode.firstError,
+      issues: mode.issues,
+      path: mode.path,
+      pathExpr: `[${mode.path.map((k) => JSON.stringify(k)).join(',')}${mode.path.length ? ',' : ''}${key.dynamic}]`,
+    };
+  }
+  const newPath = [...mode.path, key];
+  return { fast: false, firstError: mode.firstError, issues: mode.issues, path: newPath, pathExpr: JSON.stringify(newPath) };
+};
 
-    if (primitiveType) {
-      code.push(
-        `if (typeof ${valueAlias} !== '${primitiveType}') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected type ${schema?.name}\`); }`,
-      );
-      if (primitiveType === 'number') {
-        code.push(
-          `if (Number.isNaN(${valueAlias})) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
-        );
-      }
-    } else if (name === 'Function') {
-      code.push(
-        `if (typeof ${valueAlias} !== 'function') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected type Function\`); }`,
-      );
-    } else {
-      const index = context.register(schema);
-      const registryAlias = context.unique('r');
-      code.push(
-        `const ${registryAlias} = ctx.registry[${index}];`,
-        `if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { throw new TypeError(\`Invalid instance of \${${valueAlias}?.constructor?.name} for path "${path}", expected an instance of ${schema?.name}\`); }`,
-        `if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { throw new TypeError(\`Invalid type \${${valueAlias}?.constructor?.name} for path "${path}", expected type ${schema?.name}\`); }`,
-        `if (Number.isNaN(${valueAlias}?.valueOf?.())) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected a valid ${schema?.name}\`); }`,
-      );
-    }
-    return code.join('\n');
-  } else if (Array.isArray(schema)) {
-    const valueAlias = context.unique('v');
-    const code: string[] = [
-      `const ${valueAlias} = ${valuePath};`,
-      codeGenExpectNonNullable(valueAlias, path),
-      codeGenExpectNonError(valueAlias, path),
-      codeGenExpectObject(valueAlias, path, 'Array'),
-      codeGenExpectArray(valueAlias, path),
-    ];
-    if (schema.length > 0) {
-      const value = context.unique('val');
-      const key = context.unique('key');
-      const errorsAlias = context.unique('err');
-      code.push(`const ${errorsAlias} = [];`);
+const toLiteral = (value: unknown): string => (typeof value === 'bigint' ? `${value}n` : JSON.stringify(value));
 
-      if (schema.length === 1) {
-        code.push(
-          ...schema.map(
-            (s) =>
-              `for (let ${key} = 0; ${key} < ${valueAlias}.length; ${key}++) { const ${value} = ${valueAlias}[${key}]; ${codeGenCollectErrors(errorsAlias, codeGen(s, context, value, `${path}[\${${key}}]`))} }`,
-          ),
-        );
+const codeGen = <T>(schema: Schema<T>, context: Context, valuePath: string, mode: Mode): string => {
+  const emit = mode.fast
+    ? null
+    : mode.firstError
+      ? (msg: string) => `${mode.issues} = [{ message: ${msg}, path: ${mode.pathExpr} }]; return ${mode.issues};`
+      : (msg: string) => `(${mode.issues} || (${mode.issues} = [])).push({ message: ${msg}, path: ${mode.pathExpr} });`;
+  const fail = mode.fast ? (mode.onFail ?? 'return false;') : '';
+
+  if (isTagged(schema)) {
+    const tag = schema[$op];
+    if (tag === AND) {
+      const valueAlias = context.unique('v');
+      const code = schema.schemas.map((s) => codeGen(s, context, valueAlias, mode)).join('\n');
+      return `const ${valueAlias} = ${valuePath};\n${code}`;
+    } else if (tag === OR) {
+      const valueAlias = context.unique('v');
+      const foundValid = context.unique('valid');
+      if (mode.fast) {
+        const branches = schema.schemas.map((s) => {
+          const branchValid = context.unique('valid');
+          const branchCode = codeGen(s, context, valueAlias, { ...mode, onFail: `${branchValid} = false;` });
+          return `if (!${foundValid}) { let ${branchValid} = true; ${branchCode} if (${branchValid}) { ${foundValid} = true; } }`;
+        });
+        return `const ${valueAlias} = ${valuePath};\nlet ${foundValid} = false;\n${branches.join('\n')}\nif (!${foundValid}) { ${fail} }`;
+      } else if (mode.firstError) {
+        const firstBranchIssues = context.unique('iss');
+        const branches = schema.schemas.map((s, idx) => {
+          const branchIssues = context.unique('iss');
+          const branchCode = codeGen(s, context, valueAlias, {
+            fast: false,
+            firstError: true,
+            issues: branchIssues,
+            path: mode.path,
+            pathExpr: mode.pathExpr,
+          }).replace(new RegExp(`; return ${branchIssues};`, 'g'), ';');
+          if (idx === 0) {
+            return `if (!${foundValid}) { let ${branchIssues}; ${branchCode} if (!${branchIssues}) { ${foundValid} = true; } else { ${firstBranchIssues} = ${branchIssues}; } }`;
+          }
+          return `if (!${foundValid}) { let ${branchIssues}; ${branchCode} if (!${branchIssues}) { ${foundValid} = true; } }`;
+        });
+        return `const ${valueAlias} = ${valuePath};\nlet ${firstBranchIssues};\nlet ${foundValid} = false;\n${branches.join('\n')}\nif (!${foundValid}) { return ${firstBranchIssues}; }`;
       } else {
-        code.push(
-          `if (${valueAlias}.length > ${schema.length}) { throw new TypeError(\`Invalid tuple length \${${valueAlias}.length} for path "${path}", expected ${schema.length}.\`); }`,
-        );
-        code.push(...schema.map((s, idx) => codeGenCollectErrors(errorsAlias, codeGen(s, context, `${valueAlias}[${idx}]`, `${path}[${idx}]`))));
+        const localIssues = context.unique('iss');
+        const branches = schema.schemas.map((s) => {
+          const branchIssues = context.unique('iss');
+          const branchCode = codeGen(s, context, valueAlias, {
+            fast: false,
+            firstError: false,
+            issues: branchIssues,
+            path: mode.path,
+            pathExpr: mode.pathExpr,
+          });
+          return `if (!${foundValid}) { let ${branchIssues}; ${branchCode} if (!${branchIssues}) { ${foundValid} = true; } else { ${localIssues}.push(...${branchIssues}); } }`;
+        });
+        return `const ${valueAlias} = ${valuePath};\nconst ${localIssues} = [];\nlet ${foundValid} = false;\n${branches.join('\n')}\nif (!${foundValid}) { (${mode.issues} || (${mode.issues} = [])).push(...${localIssues}); }`;
+      }
+    } else if (tag === OPTIONAL) {
+      const valueAlias = context.unique('v');
+      return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} !== undefined && ${valueAlias} !== null) { ${codeGen((schema as OptionalShape<T>).schemas[0], context, valueAlias, mode)} }`;
+    } else if (tag === TUPLE) {
+      const valueAlias = context.unique('v');
+      if (mode.fast) {
+        return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} === null || typeof ${valueAlias} !== 'object' || !Array.isArray(${valueAlias}) || ${valueAlias}.length !== ${schema.schemas.length}) { ${fail} }\n${schema.schemas.map((s, idx) => codeGen(s, context, `${valueAlias}[${idx}]`, mode)).join('\n')}`;
+      } else {
+        return [
+          `const ${valueAlias} = ${valuePath};`,
+          `if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`,
+          `else if (typeof ${valueAlias} !== 'object') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected an instance of Array\``)} }`,
+          `else if (!Array.isArray(${valueAlias})) { ${emit!(`\`Invalid instance of \${${valueAlias}.constructor?.name}, expected an instance of Array\``)} }`,
+          `else if (${valueAlias}.length !== ${schema.schemas.length}) { ${emit!(`\`Invalid tuple length \${${valueAlias}.length}, expected ${schema.schemas.length}\``)} }`,
+          `else { ${schema.schemas.map((s, idx) => codeGen(s, context, `${valueAlias}[${idx}]`, childMode(mode, idx))).join('\n')} }`,
+        ].join('\n');
+      }
+    } else {
+      const { key, schemas } = schema as DiscriminatedShape<T>;
+      const valueAlias = context.unique('v');
+      const discriminantAlias = context.unique('d');
+      const keyStr = JSON.stringify(key);
+
+      const variants: { value: unknown; schema: Schema<T> }[] = [];
+      for (const s of schemas) {
+        if (typeof s !== 'object' || s === null || !(key in s)) {
+          throw new TypeError(`discriminated: each schema must have the discriminant key "${key}"`);
+        }
+        const discriminantValue = (s as Record<string, unknown>)[key];
+        if (typeof discriminantValue !== 'string' && typeof discriminantValue !== 'number' && typeof discriminantValue !== 'boolean') {
+          throw new TypeError(`discriminated: discriminant value must be a string, number, or boolean literal`);
+        }
+        variants.push({ value: discriminantValue, schema: s });
       }
 
-      code.push(codeGenExpectNoErrors(errorsAlias));
+      if (mode.fast) {
+        const branches = variants.map(({ value, schema: s }) => {
+          const branchCode = codeGen(s, context, valueAlias, mode);
+          return `if (${discriminantAlias} === ${JSON.stringify(value)}) { ${branchCode} }`;
+        });
+        return [
+          `const ${valueAlias} = ${valuePath};`,
+          `if (${valueAlias} === null || ${valueAlias} === undefined || typeof ${valueAlias} !== 'object' || ${valueAlias} instanceof Error) { ${fail} }`,
+          `const ${discriminantAlias} = ${valueAlias}[${keyStr}];`,
+          branches.join(' else ') + ` else { ${fail} }`,
+        ].join('\n');
+      } else {
+        const validValues = variants.map((v) => JSON.stringify(v.value)).join(', ');
+        const branches = variants.map(({ value, schema: s }) => {
+          const branchCode = codeGen(s, context, valueAlias, mode);
+          return `if (${discriminantAlias} === ${JSON.stringify(value)}) { ${branchCode} }`;
+        });
+        return [
+          `const ${valueAlias} = ${valuePath};`,
+          `if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`,
+          `else if (typeof ${valueAlias} !== 'object') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected an object\``)} }`,
+          `else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`,
+          `else {`,
+          `  const ${discriminantAlias} = ${valueAlias}[${keyStr}];`,
+          `  ${branches.join(' else ')} else { ${emit!(`\`Invalid discriminant value \${JSON.stringify(${discriminantAlias})}, expected one of: ${validValues}\``)} }`,
+          `}`,
+        ].join('\n');
+      }
     }
-    return code.join('\n');
-  } else if (typeof schema === 'object' && schema !== null) {
-    if (schema instanceof RegExp) {
-      const valueAlias = context.unique('v');
-      return `
-const ${valueAlias} = ${valuePath};
-${codeGenExpectNonNullable(valueAlias, path)}
-${codeGenExpectNonError(valueAlias, path)}
-if (!${schema.toString()}.test(String(${valueAlias}))) { throw new TypeError(\`Invalid value \${${valueAlias}} for path "${path}", expected to match ${schema.toString()}\`); }
-`;
+  }
+
+  if (typeof schema === 'function') {
+    const valueAlias = context.unique('v');
+    const name = (schema as { name?: string })?.name;
+    const s = schema as unknown;
+    const primitiveType =
+      s === String ? 'string' : s === Number ? 'number' : s === Boolean ? 'boolean' : s === BigInt ? 'bigint' : s === Symbol ? 'symbol' : null;
+
+    if (mode.fast) {
+      if (primitiveType) {
+        const checks = [`typeof ${valueAlias} !== '${primitiveType}'`];
+        if (primitiveType === 'number') checks.push(`Number.isNaN(${valueAlias})`);
+        return `const ${valueAlias} = ${valuePath};\nif (${checks.join(' || ')}) { ${fail} }`;
+      } else if (name === 'Function') {
+        return `const ${valueAlias} = ${valuePath};\nif (typeof ${valueAlias} !== 'function') { ${fail} }`;
+      } else {
+        const isError = (schema as unknown) === Error || schema?.prototype instanceof Error;
+        const index = context.register(schema);
+        const registryAlias = context.unique('r');
+        return `const ${valueAlias} = ${valuePath};\nconst ${registryAlias} = ctx.registry[${index}];\nif (${valueAlias} === null || ${valueAlias} === undefined${isError ? '' : ` || ${valueAlias} instanceof Error`} || (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) || (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) || Number.isNaN(${valueAlias}?.valueOf?.())) { ${fail} }`;
+      }
     } else {
-      const valueAlias = context.unique('v');
+      const code: string[] = [`const ${valueAlias} = ${valuePath};`];
+      if (primitiveType) {
+        code.push(`if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`);
+        code.push(`else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`);
+        code.push(`else if (typeof ${valueAlias} !== '${primitiveType}') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected type ${name}\``)} }`);
+        if (primitiveType === 'number')
+          code.push(`else if (Number.isNaN(${valueAlias})) { ${emit!(`\`Invalid value \${${valueAlias}}, expected a valid ${name}\``)} }`);
+      } else if (name === 'Function') {
+        code.push(`if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`);
+        code.push(`else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`);
+        code.push(`else if (typeof ${valueAlias} !== 'function') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected type Function\``)} }`);
+      } else {
+        const isError = (schema as unknown) === Error || schema?.prototype instanceof Error;
+        const index = context.register(schema);
+        const registryAlias = context.unique('r');
+        code.push(`const ${registryAlias} = ctx.registry[${index}];`);
+        code.push(`if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`);
+        if (!isError) code.push(`else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`);
+        code.push(
+          `else if (typeof ${valueAlias} === 'object' && !(${valueAlias} instanceof ${registryAlias})) { ${emit!(`\`Invalid instance of \${${valueAlias}?.constructor?.name}, expected an instance of ${name}\``)} }`,
+        );
+        code.push(
+          `else if (typeof ${valueAlias} !== 'object' && ${valueAlias}?.constructor !== ${registryAlias}) { ${emit!(`\`Invalid type \${${valueAlias}?.constructor?.name}, expected type ${name}\``)} }`,
+        );
+        code.push(`else if (Number.isNaN(${valueAlias}?.valueOf?.())) { ${emit!(`\`Invalid value \${${valueAlias}}, expected a valid ${name}\``)} }`);
+      }
+      return code.join('\n');
+    }
+  }
+
+  if (Array.isArray(schema)) {
+    const valueAlias = context.unique('v');
+    if (mode.fast) {
+      let code = `const ${valueAlias} = ${valuePath};\nif (!Array.isArray(${valueAlias})) { ${fail} }`;
+      if (schema.length === 1) {
+        const value = context.unique('val');
+        const key = context.unique('key');
+        code += `\nfor (let ${key} = 0; ${key} < ${valueAlias}.length; ${key}++) { const ${value} = ${valueAlias}[${key}]; ${codeGen(schema[0], context, value, mode)} }`;
+      } else if (schema.length > 1) {
+        code += `\nif (${valueAlias}.length > ${schema.length}) { ${fail} }`;
+        code += '\n' + schema.map((s, idx) => codeGen(s, context, `${valueAlias}[${idx}]`, mode)).join('\n');
+      }
+      return code;
+    } else {
       const code: string[] = [
         `const ${valueAlias} = ${valuePath};`,
-        codeGenExpectNonNullable(valueAlias, path),
-        codeGenExpectObject(valueAlias, path, 'Object'),
-        codeGenExpectNonError(valueAlias, path),
+        `if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`,
+        `else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`,
+        `else if (typeof ${valueAlias} !== 'object') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected an instance of Array\``)} }`,
+        `else if (!Array.isArray(${valueAlias})) { ${emit!(`\`Invalid instance of \${${valueAlias}.constructor?.name}, expected an instance of Array\``)} }`,
       ];
-      if ($keys in schema) {
-        const keysAlias = context.unique('k');
-        const errorsAlias = context.unique('err');
-        const kAlias = context.unique('k');
-        code.push(`
-const ${keysAlias} = Object.keys(${valueAlias});
-const ${errorsAlias} = [];
-for (const ${kAlias} of ${keysAlias}) { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$keys], context, kAlias, `${path}[\${${kAlias}}]`))} }
-${codeGenExpectNoErrors(errorsAlias)}
-`);
+      if (schema.length > 0) {
+        const value = context.unique('val');
+        const key = context.unique('key');
+        if (schema.length === 1) {
+          // Dynamic key - use runtime concat
+          code.push(
+            `else { for (let ${key} = 0; ${key} < ${valueAlias}.length; ${key}++) { const ${value} = ${valueAlias}[${key}]; ${codeGen(schema[0], context, value, childMode(mode, { dynamic: key }))} } }`,
+          );
+        } else {
+          code.push(
+            `else if (${valueAlias}.length > ${schema.length}) { ${emit!(`\`Invalid tuple length \${${valueAlias}.length}, expected ${schema.length}\``)} }`,
+          );
+          code.push(`else { ${schema.map((s, idx) => codeGen(s, context, `${valueAlias}[${idx}]`, childMode(mode, idx))).join('\n')} }`);
+        }
       }
-      if ($values in schema) {
-        const vAlias = context.unique('val');
-        const kAlias = context.unique('k');
-        const entriesAlias = context.unique('en');
-        const errorsAlias = context.unique('err');
-        code.push(`
-const ${entriesAlias} = Object.entries(${valueAlias});
-const ${errorsAlias} = [];
-for (const [${kAlias}, ${vAlias}] of ${entriesAlias}) { ${codeGenCollectErrors(errorsAlias, codeGen(schema[$values], context, vAlias, `${path}[\${${kAlias}}]`))} }
-${codeGenExpectNoErrors(errorsAlias)}
-`);
-      }
-      if ($strict in schema && schema[$strict]) {
-        const keysAlias = context.unique('k');
-        const kAlias = context.unique('k');
-        const extraAlias = context.unique('ex');
-        code.push(`const ${keysAlias} = new Set(${JSON.stringify(Object.keys(schema))});`);
-        code.push(`const ${extraAlias} = Object.keys(${valueAlias}).filter(${kAlias} => !${keysAlias}.has(${kAlias}));`);
-        code.push(`if (${extraAlias}.length !== 0) { throw new TypeError(\`Extra properties: \${${extraAlias}}, are not allowed for path "${path}"\`); }`);
-      }
-      code.push(...Object.entries(schema).map(([key, s]) => codeGen(s, context, `${valueAlias}[${JSON.stringify(key)}]`, `${path}.${key}`)));
-      return `${code.join('\n')}`;
+      return code.join('\n');
     }
-  } else if (typeof schema === 'symbol') {
+  }
+
+  if (typeof schema === 'object' && schema !== null) {
+    if (schema instanceof RegExp) {
+      const valueAlias = context.unique('v');
+      if (mode.fast) {
+        return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} === null || ${valueAlias} === undefined || ${valueAlias} instanceof Error || !${schema.toString()}.test(String(${valueAlias}))) { ${fail} }`;
+      } else {
+        return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }\nelse if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }\nelse if (!${schema.toString()}.test(String(${valueAlias}))) { ${emit!(`\`Invalid value \${${valueAlias}}, expected to match ${schema.toString()}\``)} }`;
+      }
+    } else {
+      const valueAlias = context.unique('v');
+      if (mode.fast) {
+        let code = `const ${valueAlias} = ${valuePath};\nif (${valueAlias} === null || typeof ${valueAlias} !== 'object' || ${valueAlias} instanceof Error) { ${fail} }`;
+        if ($keys in schema) {
+          const keysAlias = context.unique('k');
+          const kAlias = context.unique('k');
+          code += `\nconst ${keysAlias} = Object.keys(${valueAlias});\nfor (const ${kAlias} of ${keysAlias}) { ${codeGen(schema[$keys], context, kAlias, mode)} }`;
+        }
+        if ($values in schema) {
+          const vAlias = context.unique('val');
+          const kAlias = context.unique('k');
+          const entriesAlias = context.unique('en');
+          code += `\nconst ${entriesAlias} = Object.entries(${valueAlias});\nfor (const [${kAlias}, ${vAlias}] of ${entriesAlias}) { ${codeGen(schema[$values], context, vAlias, mode)} }`;
+        }
+        if ($strict in schema && schema[$strict]) {
+          const keysAlias = context.unique('k');
+          const kAlias = context.unique('k');
+          const extraAlias = context.unique('ex');
+          code += `\nconst ${keysAlias} = new Set(${JSON.stringify(Object.keys(schema))});\nconst ${extraAlias} = Object.keys(${valueAlias}).filter(${kAlias} => !${keysAlias}.has(${kAlias}));\nif (${extraAlias}.length !== 0) { ${fail} }`;
+        }
+        code +=
+          '\n' +
+          Object.entries(schema)
+            .map(([key, s]) => codeGen(s, context, `${valueAlias}[${JSON.stringify(key)}]`, mode))
+            .join('\n');
+        return code;
+      } else {
+        const code: string[] = [
+          `const ${valueAlias} = ${valuePath};`,
+          `if (${valueAlias} === null || ${valueAlias} === undefined) { ${emit!(`\`Invalid value \${${valueAlias}}, expected non-nullable\``)} }`,
+          `else if (typeof ${valueAlias} !== 'object') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected an instance of Object\``)} }`,
+          `else if (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }`,
+          'else {',
+        ];
+        const innerCode: string[] = [];
+        if ($keys in schema) {
+          const keysAlias = context.unique('k');
+          const kAlias = context.unique('k');
+          innerCode.push(`const ${keysAlias} = Object.keys(${valueAlias});`);
+          // Dynamic key - use runtime concat
+          innerCode.push(`for (const ${kAlias} of ${keysAlias}) { ${codeGen(schema[$keys], context, kAlias, childMode(mode, { dynamic: kAlias }))} }`);
+        }
+        if ($values in schema) {
+          const vAlias = context.unique('val');
+          const kAlias = context.unique('k');
+          const entriesAlias = context.unique('en');
+          innerCode.push(`const ${entriesAlias} = Object.entries(${valueAlias});`);
+          // Dynamic key - use runtime concat
+          innerCode.push(
+            `for (const [${kAlias}, ${vAlias}] of ${entriesAlias}) { ${codeGen(schema[$values], context, vAlias, childMode(mode, { dynamic: kAlias }))} }`,
+          );
+        }
+        if ($strict in schema && schema[$strict]) {
+          const keysAlias = context.unique('k');
+          const kAlias = context.unique('k');
+          const extraAlias = context.unique('ex');
+          innerCode.push(`const ${keysAlias} = new Set(${JSON.stringify(Object.keys(schema))});`);
+          innerCode.push(`const ${extraAlias} = Object.keys(${valueAlias}).filter(${kAlias} => !${keysAlias}.has(${kAlias}));`);
+          innerCode.push(`if (${extraAlias}.length !== 0) { ${emit!(`\`Extra properties: \${${extraAlias}}, are not allowed\``)} }`);
+        }
+        // Static keys - pre-register paths
+        innerCode.push(...Object.entries(schema).map(([key, s]) => codeGen(s, context, `${valueAlias}[${JSON.stringify(key)}]`, childMode(mode, key))));
+        code.push(innerCode.join('\n'), '}');
+        return code.join('\n');
+      }
+    }
+  }
+
+  if (typeof schema === 'symbol') {
     const index = context.register(schema);
     const valueAlias = context.unique('v');
     const registryAlias = context.unique('r');
+    if (mode.fast) {
+      return `const ${valueAlias} = ${valuePath};\nconst ${registryAlias} = ctx.registry[${index}];\nif (typeof ${valueAlias} !== 'symbol' || ${valueAlias} !== ${registryAlias}) { ${fail} }`;
+    } else {
+      return `const ${valueAlias} = ${valuePath};\nconst ${registryAlias} = ctx.registry[${index}];\nif (typeof ${valueAlias} !== 'symbol') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected symbol\``)} }\nelse if (${valueAlias} !== ${registryAlias}) { ${emit!(`\`Invalid value \${${valueAlias}.toString()}, expected ${schema.toString()}\``)} }`;
+    }
+  }
 
-    return `
-const ${valueAlias} = ${valuePath};
-const ${registryAlias} = ctx.registry[${index}];
-if (typeof ${valueAlias} !== 'symbol') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected symbol\`); }
-if (${valueAlias} !== ${registryAlias}) { throw new TypeError(\`Invalid value \${${valueAlias}.toString()} for path "${path}", expected ${schema.toString()}\`); }
-    `;
-  } else if (schema === null || schema === undefined) {
+  if (schema === null || schema === undefined) {
     const valueAlias = context.unique('v');
-    return `
-const ${valueAlias} = ${valuePath};
-if (${valueAlias} !== null && ${valueAlias} !== undefined ) { throw new TypeError(\`Invalid value \${JSON.stringify(${valueAlias})} for path "${path}", expected nullable\`); }
-    `;
+    if (mode.fast) {
+      return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} !== null && ${valueAlias} !== undefined) { ${fail} }`;
+    } else {
+      return `const ${valueAlias} = ${valuePath};\nif (${valueAlias} !== null && ${valueAlias} !== undefined) { ${emit!(`\`Invalid value \${String(${valueAlias})}, expected nullable\``)} }`;
+    }
+  }
+
+  const valueAlias = context.unique('v');
+  if (mode.fast) {
+    return `const ${valueAlias} = ${valuePath};\nif (typeof ${valueAlias} !== '${typeof schema}' || ${valueAlias} !== ${toLiteral(schema)}) { ${fail} }`;
   } else {
-    const valueAlias = context.unique('v');
     const value = context.unique('val');
-    return `
-const ${valueAlias} = ${valuePath};
-const ${value} = ${JSON.stringify(schema)};
-${codeGenExpectNonError(valueAlias, path)}
-if (typeof ${valueAlias} !== '${typeof schema}') { throw new TypeError(\`Invalid type \${typeof ${valueAlias}} for path "${path}", expected ${typeof schema}\`); }
-if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value \${JSON.stringify(${valueAlias})} for path "${path}", expected ${JSON.stringify(schema)}\`); }
-`;
+    return `const ${valueAlias} = ${valuePath};\nconst ${value} = ${toLiteral(schema)};\nif (${valueAlias} instanceof Error) { ${emit!(`\`\${${valueAlias}.message}\``)} }\nelse if (typeof ${valueAlias} !== '${typeof schema}') { ${emit!(`\`Invalid type \${typeof ${valueAlias}}, expected ${typeof schema}\``)} }\nelse if (${valueAlias} !== ${value}) { ${emit!(`\`Invalid value \${String(${valueAlias})}, expected ${toLiteral(schema)}\``)} }`;
   }
 };
 
+const emptyIssues: StandardSchemaV1.Issue[] = [];
+
 /**
- * Compiles a schema into a validation function.
+ * Validator function returned by compile().
+ * Returns true if valid, false if invalid.
+ * Access `.issues` property after validation to get error details.
+ */
+export interface Validator<T> {
+  (data: T): boolean;
+  issues: ReadonlyArray<StandardSchemaV1.Issue>;
+}
+
+/**
+ * Options for the compile function.
+ */
+export interface CompileOptions {
+  /**
+   * When true, collects all validation errors instead of stopping at the first.
+   * Default is false (first-error mode) for optimal performance.
+   */
+  allErrors?: boolean;
+}
+
+/**
+ * Compiles a schema into a high-performance validation function.
  *
- * This function takes a schema definition and generates a JavaScript function
- * that can be used to validate data against the schema.
+ * By default uses first-error mode which stops at the first validation failure
+ * and returns immediately. This provides optimal performance for invalid data.
+ *
+ * Set `allErrors: true` to collect all validation errors (slower but more informative).
  *
  * @template T - The type of data the schema validates.
  * @param schema - The schema to compile.
- * @param rootName - A name for the root of the data structure (used in error messages).
- * @returns A validation function that takes data as input and throws a TypeError if the data does not conform to the schema.
+ * @param options - Optional configuration (allErrors: boolean).
+ * @returns A validator function that returns boolean. Access `.issues` for error details.
  *
  * @example
  * ```typescript
- * import { compile, optional, and, or } from 'ascertain';
+ * import { compile, optional, or } from 'ascertain';
  *
  * const userSchema = {
  *   name: String,
@@ -623,32 +712,65 @@ if (${valueAlias} !== ${value}) { throw new TypeError(\`Invalid value \${JSON.st
  *   role: or('admin', 'user', 'guest')
  * };
  *
- * const validateUser = compile(userSchema, 'User');
+ * // First-error mode (default) - fastest for invalid data
+ * const validate = compile(userSchema);
  *
- * // Valid data - no error thrown
- * validateUser({
- *   name: 'John Doe',
- *   age: 30,
- *   email: 'john@example.com',
- *   role: 'user'
- * });
+ * // All-errors mode - collects all validation issues
+ * const validateAll = compile(userSchema, { allErrors: true });
  *
- * // Invalid data - throws TypeError
- * try {
- *   validateUser({
- *     name: 123, // Invalid: should be string
- *     age: 'thirty' // Invalid: should be number
- *   });
- * } catch (error) {
- *   console.error(error.message); // Detailed validation errors
+ * // Valid data
+ * if (validate({ name: 'John', age: 30, role: 'user' })) {
+ *   console.log('Valid!');
+ * }
+ *
+ * // Invalid data - check .issues for details
+ * if (!validate({ name: 123, age: 'thirty' })) {
+ *   console.log(validate.issues); // Array with first validation issue
  * }
  * ```
  */
-export const compile = <T>(schema: Schema<T>, rootName: string) => {
+export const compile = <T>(schema: Schema<T>, options?: CompileOptions): Validator<T> => {
+  const allErrors = options?.allErrors ?? false;
+
+  if (allErrors) {
+    const fastContext = new Context();
+    const fastCode = `${codeGen(schema, fastContext, 'data', { fast: true })}\nreturn true;`;
+    const fastValidator = new Function('ctx', `return (data) => {\n${fastCode}\n};`)(fastContext) as (data: T) => boolean;
+
+    const issueContext = new Context();
+    const issueCode = `let issues;\n${codeGen(schema, issueContext, 'data', { fast: false, firstError: false, issues: 'issues', path: [], pathExpr: '[]' })}\nreturn issues || [];`;
+    const issueValidator = new Function('ctx', `return (data) => {\n${issueCode}\n};`)(issueContext) as (data: T) => StandardSchemaV1.Issue[];
+
+    const validator = ((data: T): boolean => {
+      if (fastValidator(data)) {
+        return true;
+      }
+      validator.issues = issueValidator(data);
+      return false;
+    }) as Validator<T>;
+    validator.issues = emptyIssues;
+    return validator;
+  }
+
+  const fastContext = new Context();
+  const fastCode = `${codeGen(schema, fastContext, 'data', { fast: true })}\nreturn true;`;
+  const fastValidator = new Function('ctx', `return (data) => {\n${fastCode}\n};`)(fastContext) as (data: T) => boolean;
+
   const context = new Context();
-  const code = codeGen(schema, context, 'data', rootName);
-  const validator = new Function('ctx', 'data', code);
-  return (data: T) => validator(context, data);
+  const code = codeGen(schema, context, 'data', { fast: false, firstError: true, issues: 'issues', path: [], pathExpr: '[]' });
+  const firstErrorValidator = new Function('ctx', `return (data) => {\nlet issues;\n${code}\nreturn issues;\n};`)(context) as (
+    data: T,
+  ) => StandardSchemaV1.Issue[] | undefined;
+
+  const validator = ((data: T): boolean => {
+    if (fastValidator(data)) {
+      return true;
+    }
+    validator.issues = firstErrorValidator(data)!;
+    return false;
+  }) as Validator<T>;
+  validator.issues = emptyIssues;
+  return validator;
 };
 
 /**
@@ -660,7 +782,6 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  * @template T - The type of data the schema validates.
  * @param schema - The schema to validate against.
  * @param data - The data to validate.
- * @param rootName - A name for the root of the data structure (used in error messages, defaults to '[root]').
  * @throws `{TypeError}` If the data does not conform to the schema.
  *
  * @example
@@ -682,7 +803,7 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  * };
  *
  * // Validate data - throws if invalid, otherwise continues silently
- * ascertain(userSchema, userData, 'UserData');
+ * ascertain(userSchema, userData);
  * console.log('User data is valid!');
  *
  * // Example with invalid data
@@ -691,7 +812,7 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  *     name: 'Bob',
  *     age: 'twenty-five', // Invalid: should be number
  *     active: true
- *   }, 'UserData');
+ *   });
  * } catch (error) {
  *   console.error('Validation failed:', error.message);
  * }
@@ -703,17 +824,20 @@ export const compile = <T>(schema: Schema<T>, rootName: string) => {
  * const numbersSchema = [Number];
  * const numbers = [1, 2, 3, 4, 5];
  *
- * ascertain(numbersSchema, numbers, 'Numbers');
+ * ascertain(numbersSchema, numbers);
  *
  * // Tuple validation
  * const coordinateSchema = tuple(Number, Number);
  * const point = [10, 20];
  *
- * ascertain(coordinateSchema, point, 'Point');
+ * ascertain(coordinateSchema, point);
  * ```
  */
-export const ascertain = <T>(schema: Schema<T>, data: T, rootName = '[root]') => {
-  compile(schema, rootName)(data);
+export const ascertain = <T>(schema: Schema<T>, data: T) => {
+  const validator = compile(schema);
+  if (!validator(data)) {
+    throw new TypeError(validator.issues[0].message, { cause: { issues: validator.issues } });
+  }
 };
 
 /**
@@ -732,7 +856,6 @@ export type ExtractShape<C, S> = {
  *
  * @template C - The type of the config object.
  * @param config - The config object to validate against.
- * @param rootName - A name for the root of the data structure (used in error messages).
  * @returns A validator function that takes a schema and returns the typed config subset.
  *
  * @example
@@ -745,7 +868,7 @@ export type ExtractShape<C, S> = {
  *   redis: { host: as.string(process.env.REDIS_HOST) },
  * };
  *
- * const validate = createValidator(config, '[CONFIG]');
+ * const validate = createValidator(config);
  *
  * // Consumer only validates what it needs
  * const { app, kafka } = validate({
@@ -758,9 +881,111 @@ export type ExtractShape<C, S> = {
  * // redis is not accessible - TypeScript error
  * ```
  */
-export const createValidator = <C>(config: C, rootName = '[root]') => {
+export const createValidator = <C>(config: C) => {
   return <S extends Schema<Partial<C>>>(schema: S): ExtractShape<C, S> => {
-    ascertain(schema as Schema<C>, config, rootName);
+    ascertain(schema as Schema<C>, config);
     return config as ExtractShape<C, S>;
   };
+};
+
+export interface StandardSchemaV1<Input = unknown, Output = Input> {
+  readonly '~standard': StandardSchemaV1.Props<Input, Output>;
+}
+
+export namespace StandardSchemaV1 {
+  export interface Props<Input = unknown, Output = Input> {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>;
+    readonly types?: { readonly input: Input; readonly output: Output };
+  }
+
+  export type Result<Output> = SuccessResult<Output> | FailureResult;
+
+  export interface SuccessResult<Output> {
+    readonly value: Output;
+    readonly issues?: undefined;
+  }
+
+  export interface FailureResult {
+    readonly issues: ReadonlyArray<Issue>;
+  }
+
+  export interface Issue {
+    readonly message: string;
+    readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined;
+  }
+
+  export interface PathSegment {
+    readonly key: PropertyKey;
+  }
+}
+
+/**
+ * Wraps an Ascertain schema to make it Standard Schema v1 compliant.
+ *
+ * Creates a validator that implements the Standard Schema specification,
+ * enabling interoperability with tools like tRPC, TanStack Form, and other
+ * ecosystem libraries that consume Standard Schema-compliant validators.
+ *
+ * The returned function can be used both as a regular Ascertain validator
+ * (throws on error) and as a Standard Schema validator (returns result object).
+ *
+ * @template T - The type of data the schema validates.
+ * @param schema - The Ascertain schema to wrap.
+ * @returns A function that validates data, with a `~standard` property for Standard Schema compliance.
+ *
+ * @see https://standardschema.dev/
+ *
+ * @example
+ * ```typescript
+ * import { standardSchema, or, optional } from 'ascertain';
+ *
+ * // Create a Standard Schema-compliant validator
+ * const userValidator = standardSchema({
+ *   name: String,
+ *   age: Number,
+ *   role: or('admin', 'user'),
+ *   email: optional(String),
+ * });
+ *
+ * // Use as regular Ascertain validator (throws on error)
+ * userValidator({ name: 'Alice', age: 30, role: 'admin' });
+ *
+ * // Use Standard Schema interface (returns result object)
+ * const result = userValidator['~standard'].validate(unknownData);
+ * if (result.issues) {
+ *   console.log(result.issues);
+ * } else {
+ *   console.log(result.value); // typed as User
+ * }
+ *
+ * // Works with tRPC, TanStack Form, etc.
+ * ```
+ */
+interface StandardSchemaFn<T> {
+  (data: T): void;
+  '~standard': StandardSchemaV1.Props<T, T>;
+}
+
+export const standardSchema = <T>(schema: Schema<T>): StandardSchemaFn<T> => {
+  const validator = compile(schema);
+
+  const fn = ((data: T) => {
+    if (!validator(data)) {
+      throw new TypeError(validator.issues[0].message, { cause: { issues: validator.issues } });
+    }
+  }) as StandardSchemaFn<T>;
+  fn['~standard'] = {
+    version: 1 as const,
+    vendor: 'ascertain',
+    validate: (value: unknown): StandardSchemaV1.Result<T> => {
+      if (validator(value as T)) {
+        return { value: value as T };
+      }
+      return { issues: validator.issues };
+    },
+  };
+
+  return fn;
 };
