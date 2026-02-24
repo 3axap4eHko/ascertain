@@ -52,14 +52,14 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.56.0",
-    "@typescript-eslint/parser": "^8.56.0",
-    "@typescript-eslint/typescript-estree": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@typescript-eslint/typescript-estree": "^8.56.1",
     "@vitest/coverage-v8": "^4.0.18",
     "@vuepress/bundler-vite": "2.0.0-rc.26",
-    "@vuepress/theme-default": "2.0.0-rc.121",
+    "@vuepress/theme-default": "2.0.0-rc.123",
     "ascertain": "latest",
-    "eslint": "^10.0.1",
+    "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "handlebars": "^4.7.8",
@@ -71,11 +71,11 @@
     "sass-embedded": "^1.97.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.56.0",
+    "typescript-eslint": "^8.56.1",
     "vitest": "^4.0.18",
     "vue": "^3.5.28",
     "vuepress": "2.0.0-rc.26",
     "zod": "^4.3.6"
   },
-  "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a"
+  "packageManager": "pnpm@10.30.2"
 }
