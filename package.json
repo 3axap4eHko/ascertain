@@ -73,7 +73,7 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vitest": "^4.0.18",
-    "vue": "^3.5.28",
+    "vue": "^3.5.29",
     "vuepress": "2.0.0-rc.26",
     "zod": "^4.3.6"
   },
