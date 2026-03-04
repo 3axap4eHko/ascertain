@@ -18,6 +18,7 @@ const AND = Symbol.for('@@and');
 const OPTIONAL = Symbol.for('@@optional');
 const TUPLE = Symbol.for('@@tuple');
 const DISCRIMINATED = Symbol.for('@@discriminated');
+const CHECK = Symbol.for('@@check');
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -42,8 +43,15 @@ interface DiscriminatedShape<T> {
   readonly [$op]: typeof DISCRIMINATED;
   readonly key: string;
 }
+export interface CheckContext {
+  ref(value: unknown): string;
+}
+interface CheckShape {
+  readonly [$op]: typeof CHECK;
+  readonly compile: (value: string, ctx: CheckContext) => { check: string; message: string };
+}
 
-type Tagged<T> = OrShape<T> | AndShape<T> | OptionalShape<T> | TupleShape<T> | DiscriminatedShape<T>;
+type Tagged<T> = OrShape<T> | AndShape<T> | OptionalShape<T> | TupleShape<T> | DiscriminatedShape<T> | CheckShape;
 
 const OrCtor = function <T>(this: OrShape<T>, schemas: Schema<T>[]) {
   (this as Mutable<OrShape<T>>).schemas = schemas;
@@ -70,6 +78,11 @@ const DiscriminatedCtor = function <T>(this: DiscriminatedShape<T>, schemas: Sch
   (this as Mutable<DiscriminatedShape<T>>).key = key;
 } as unknown as { new <T>(schemas: Schema<T>[], key: string): DiscriminatedShape<T>; prototype: { [$op]: typeof DISCRIMINATED } };
 DiscriminatedCtor.prototype[$op] = DISCRIMINATED;
+
+const CheckCtor = function (this: CheckShape, compileFn: CheckShape['compile']) {
+  (this as Mutable<CheckShape>).compile = compileFn;
+} as unknown as { new (compileFn: CheckShape['compile']): CheckShape; prototype: { [$op]: typeof CHECK } };
+CheckCtor.prototype[$op] = CHECK;
 
 /**
  * Represents a schema for validating data.
@@ -137,6 +150,76 @@ export const discriminated = <T>(schemas: Schema<T>[], key: string): Discriminat
   if (schemas.length === 0) throw new TypeError('discriminated requires at least one schema');
   return new DiscriminatedCtor(schemas, key);
 };
+
+export const check = (
+  fnOrOpts: ((v: unknown) => boolean) | { compile: (value: string, ctx: CheckContext) => { check: string; message: string } },
+  message?: string,
+): CheckShape => {
+  if (typeof fnOrOpts === 'function') {
+    return new CheckCtor((v, ctx) => {
+      const fnRef = ctx.ref(fnOrOpts);
+      return {
+        check: `!${fnRef}(${v})`,
+        message: message ? JSON.stringify(message) : `\`check failed for value \${${v}}\``,
+      };
+    });
+  }
+  return new CheckCtor(fnOrOpts.compile);
+};
+
+export const min = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v} < ${n}`,
+    message: message ? JSON.stringify(message) : `\`must be >= ${n}, got \${${v}}\``,
+  }));
+
+export const max = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v} > ${n}`,
+    message: message ? JSON.stringify(message) : `\`must be <= ${n}, got \${${v}}\``,
+  }));
+
+export const integer = (message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `!Number.isInteger(${v})`,
+    message: message ? JSON.stringify(message) : `\`must be an integer, got \${${v}}\``,
+  }));
+
+export const minLength = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v}.length < ${n}`,
+    message: message ? JSON.stringify(message) : `\`length must be >= ${n}, got \${${v}.length}\``,
+  }));
+
+export const maxLength = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v}.length > ${n}`,
+    message: message ? JSON.stringify(message) : `\`length must be <= ${n}, got \${${v}.length}\``,
+  }));
+
+export const gt = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v} <= ${n}`,
+    message: message ? JSON.stringify(message) : `\`must be > ${n}, got \${${v}}\``,
+  }));
+
+export const lt = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v} >= ${n}`,
+    message: message ? JSON.stringify(message) : `\`must be < ${n}, got \${${v}}\``,
+  }));
+
+export const multipleOf = (n: number, message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `${v} % ${n} !== 0`,
+    message: message ? JSON.stringify(message) : `\`must be a multiple of ${n}, got \${${v}}\``,
+  }));
+
+export const uniqueItems = (message?: string): CheckShape =>
+  new CheckCtor((v) => ({
+    check: `new Set(${v}).size !== ${v}.length`,
+    message: message ? JSON.stringify(message) : `\`must have unique items\``,
+  }));
 
 /**
  * Decodes a base64-encoded string to UTF-8.
@@ -295,6 +378,87 @@ export const as = {
   },
 };
 
+const DATETIME_RE = /^\d{4}-[01]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d{2}(?::?\d{2})?)$/i;
+const TIME_FMT_RE = /^(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d{2}(?::?\d{2})?)$/i;
+const DURATION_RE = /^P(?!$)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/;
+const EMAIL_RE = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+const IDN_EMAIL_RE =
+  /^[a-z0-9!#$%&'*+/=?^_`{|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]+)*@(?:[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF](?:[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]*[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])?\.)+[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF](?:[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]*[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])?$/i;
+const HOSTNAME_RE = /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/i;
+const IDN_HOSTNAME_RE =
+  /^(?=.{1,253}\.?$)[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF](?:[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]{0,61}[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])?(?:\.[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF](?:[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF-]{0,61}[a-z0-9\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])?)*\.?$/i;
+const IPV4_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+const IPV6_RE =
+  /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?$/i;
+const URI_RE =
+  /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+const isUriRef = (s: string): boolean => URI_RE.test(s) || /^[a-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*$/i.test(s);
+const IRI_RE =
+  /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|%[0-9a-f]{2})*)?$/i;
+const isIriRef = (s: string): boolean => IRI_RE.test(s) || /^[a-z0-9\-._~:/?#\[\]@!$&'()*+,;=\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF%]*$/i.test(s);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const URI_TEMPLATE_RE =
+  /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i;
+const JSON_POINTER_RE = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
+const REL_JSON_POINTER_RE = /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/;
+
+const DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const isValidDate = (s: string): boolean => {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const month = +m[1],
+    day = +m[2];
+  if (month < 1 || month > 12 || day < 1) return false;
+  if (month === 2) {
+    const y = +s.slice(0, 4);
+    return day <= (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 29 : 28);
+  }
+  return day <= DAYS[month];
+};
+
+const isValidRegex = (s: string): boolean => {
+  try {
+    new RegExp(s);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const regexFormat = (re: RegExp, name: string, message?: string): CheckShape =>
+  new CheckCtor((v, ctx) => ({
+    check: `!${ctx.ref(re)}.test(${v})`,
+    message: message ? JSON.stringify(message) : `\`must be a valid ${name}, got \${${v}}\``,
+  }));
+
+const fnFormat = (fn: (s: string) => boolean, name: string, message?: string): CheckShape =>
+  new CheckCtor((v, ctx) => ({
+    check: `!${ctx.ref(fn)}(${v})`,
+    message: message ? JSON.stringify(message) : `\`must be a valid ${name}, got \${${v}}\``,
+  }));
+
+export const format = {
+  dateTime: (message?: string): CheckShape => regexFormat(DATETIME_RE, 'date-time', message),
+  date: (message?: string): CheckShape => fnFormat(isValidDate, 'date', message),
+  time: (message?: string): CheckShape => regexFormat(TIME_FMT_RE, 'time', message),
+  duration: (message?: string): CheckShape => regexFormat(DURATION_RE, 'duration', message),
+  email: (message?: string): CheckShape => regexFormat(EMAIL_RE, 'email', message),
+  idnEmail: (message?: string): CheckShape => regexFormat(IDN_EMAIL_RE, 'idn-email', message),
+  hostname: (message?: string): CheckShape => regexFormat(HOSTNAME_RE, 'hostname', message),
+  idnHostname: (message?: string): CheckShape => regexFormat(IDN_HOSTNAME_RE, 'idn-hostname', message),
+  ipv4: (message?: string): CheckShape => regexFormat(IPV4_RE, 'ipv4', message),
+  ipv6: (message?: string): CheckShape => regexFormat(IPV6_RE, 'ipv6', message),
+  uri: (message?: string): CheckShape => regexFormat(URI_RE, 'uri', message),
+  uriReference: (message?: string): CheckShape => fnFormat(isUriRef, 'uri-reference', message),
+  iri: (message?: string): CheckShape => regexFormat(IRI_RE, 'iri', message),
+  iriReference: (message?: string): CheckShape => fnFormat(isIriRef, 'iri-reference', message),
+  uuid: (message?: string): CheckShape => regexFormat(UUID_RE, 'uuid', message),
+  uriTemplate: (message?: string): CheckShape => regexFormat(URI_TEMPLATE_RE, 'uri-template', message),
+  jsonPointer: (message?: string): CheckShape => regexFormat(JSON_POINTER_RE, 'json-pointer', message),
+  relativeJsonPointer: (message?: string): CheckShape => regexFormat(REL_JSON_POINTER_RE, 'relative-json-pointer', message),
+  regex: (message?: string): CheckShape => fnFormat(isValidRegex, 'regex', message),
+};
+
 /**
  * A class representing the context for schema validation.
  *
@@ -419,6 +583,14 @@ const codeGen = <T>(schema: Schema<T>, context: Context, valuePath: string, mode
           `else { ${schema.schemas.map((s, idx) => codeGen(s, context, `${valueAlias}[${idx}]`, childMode(mode, idx))).join('\n')} }`,
         ].join('\n');
       }
+    } else if (tag === CHECK) {
+      const valueAlias = context.unique('v');
+      const ref = (v: unknown) => `ctx.registry[${context.register(v)}]`;
+      const { check: cond, message } = (schema as CheckShape).compile(valueAlias, { ref });
+      if (mode.fast) {
+        return `const ${valueAlias} = ${valuePath};\nif (${cond}) { ${fail} }`;
+      }
+      return `const ${valueAlias} = ${valuePath};\nif (${cond}) { ${emit!(message)} }`;
     } else {
       const { key, schemas } = schema as DiscriminatedShape<T>;
       const valueAlias = context.unique('v');

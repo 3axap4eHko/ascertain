@@ -58,6 +58,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "@vuepress/bundler-vite": "2.0.0-rc.26",
     "@vuepress/theme-default": "2.0.0-rc.121",
+    "ajv": "^8.18.0",
     "ascertain": "latest",
     "eslint": "^10.0.1",
     "eslint-config-prettier": "^10.1.8",
