@@ -32,7 +32,7 @@ const zodTarget = suite.target('zod', async () => {
 zodTarget.measure('validate all errors', ({ schema }, input) => {
   try {
     schema.parse(input[0]);
-  } catch { }
+  } catch {}
 });
 
 const ajvTarget = suite.target('ajv', async () => {
@@ -89,7 +89,7 @@ releaseTarget.measure('validate all errors', ({ validateAll }, input) => {
 });
 
 const ascertainTarget = suite.target('current ascertain', async () => {
-  const { compile } = await import('../build/index.js');
+  const { compile } = await import('../index.js');
   const schema = {
     string: String,
     number: Number,

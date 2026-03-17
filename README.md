@@ -78,13 +78,13 @@ validateUser(user2);
 
 | Library | Mode | Valid (ops/s) | Invalid (ops/s) |
 |---------|------|---------------|-----------------|
-| **Ascertain** | first-error | 80M | 41M |
-| **Ascertain** | all-errors | 80M | 25M |
-| AJV | first-error | 52M | 35M |
-| AJV | all-errors | 52M | 20M |
-| Zod | all-errors | 34M | 77K |
+| **Ascertain** | first-error | 322M | 84M |
+| **Ascertain** | all-errors | 325M | 36M |
+| AJV | first-error | 92M | 65M |
+| AJV | all-errors | 92M | 30M |
+| Zod | all-errors | 62M | 72K |
 
-Benchmark source: [`benchmarks/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/benchmarks/benchmark.ts)
+Benchmark source: [`src/__bench__/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/src/__bench__/benchmark.ts)
 
 Run it locally:
 

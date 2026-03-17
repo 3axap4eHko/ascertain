@@ -15,9 +15,9 @@
     "src/index.ts"
   ],
   "scripts": {
-    "build": "rm -rf build && NODE_ENV=production inop src/ build -i __tests__ && tsc --declaration --emitDeclarationOnly",
+    "build": "rm -rf build && NODE_ENV=production inop src/ build -i __tests__ -i __bench__ && tsc --declaration --emitDeclarationOnly",
     "lint": "eslint src",
-    "bench": "overtake benchmarks/benchmark.ts -w 1",
+    "bench": "overtake src/__bench__/benchmark.ts -w 1",
     "test": "NODE_ENV=test vitest run",
     "docs:build": "vuepress build docs",
     "docs:clean-dev": "vuepress dev docs --clean-cache",
