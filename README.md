@@ -8,7 +8,20 @@ Zero-dependency, high-performance schema validator for Node.js and browsers.
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
 
-[Documentation](https://3axap4ehko.github.io/ascertain/)
+## Table of Contents
+
+- [Features](#features)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Performance](#performance)
+- [Schema Reference](#schema-reference)
+- [Type Casting](#type-casting)
+- [Patterns](#patterns)
+- [Compile Options](#compile-options)
+- [Standard Schema](#standard-schema)
+- [Complete Example](#complete-example)
+- [Documentation](https://3axap4ehko.github.io/ascertain/) <!--API_TOC-->
+- [License](#license)
 
 ## Features
 
@@ -70,6 +83,22 @@ validateUser(user2);
 | AJV | first-error | 52M | 35M |
 | AJV | all-errors | 52M | 20M |
 | Zod | all-errors | 34M | 77K |
+
+Benchmark source: [`benchmarks/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/benchmarks/benchmark.ts)
+
+Run it locally:
+
+```bash
+pnpm build
+pnpm bench
+```
+
+Notes:
+
+- Maintainer-run benchmark, not an independent study
+- Measures valid and invalid paths for compiled validators
+- Compares the current checkout, published `ascertain`, AJV, and Zod
+- Results vary by CPU, Node.js version, and workload, so treat the numbers as directional
 
 ## Schema Reference
 
@@ -139,7 +168,7 @@ const config = {
 
 // Errors surface with clear paths
 ascertain({ port: Number, host: String }, config);
-// → TypeError: "Invalid value undefined, expected non-nullable"
+// → TypeError: "Invalid value undefined, expected a string"
 ```
 
 ## Patterns
@@ -352,6 +381,8 @@ if (!validate(data)) {
   console.error(validate.issues);
 }
 ```
+
+<!--API_REFERENCE-->
 
 ## License
 

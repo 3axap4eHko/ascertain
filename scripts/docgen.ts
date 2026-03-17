@@ -1,17 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { print } from 'recast';
 import { parse, TSESTree, AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
-import Handlebars from 'handlebars';
 
-const fileName = `${process.cwd()}/${process.argv[2]}`;
-
-const sourceCode = await readFile(fileName, 'utf-8');
+const cwd = process.cwd();
+const files = process.argv.slice(2);
 
 interface Member {
-  type: 'function' | 'constant';
   args: string[]
   returnType: string;
   docs: string[];
+  kind: 'method' | 'get' | 'set' | 'const';
 }
 
 interface Namespace {
@@ -27,7 +25,7 @@ class ASTVisitor {
     docs: [],
   }];
   ast?: TSESTree.Program;
-  lastNode: TSESTree.Node = ast;
+  lastNode?: TSESTree.Node;
 
   debug = false;
 
@@ -37,13 +35,11 @@ class ASTVisitor {
 
   getNodeComments(node: TSESTree.Node) {
     return this.ast?.comments
-      ?.filter(comment => comment.range[0] >= this.lastNode.range[1] && comment.range[1] <= node.range[0])
-      ?.filter(comment => comment.type === 'Block') // Only JSDoc comments, not line comments
+      ?.filter(comment => comment.range[0] >= (this.lastNode?.range[1] ?? 0) && comment.range[1] <= node.range[0])
       .map(comment => comment.value
         .replace(/( +\*|\*\n)/g, '')
         .replace(/(\@\w+)\s+(\{[^\}]+\})/g, '$1 `$2`')
         .replace(/( *\@\w+)/g, '-$1')
-        .replace(/\s*-\s*@example[\s\S]*?(?=\s*-\s*@|\s*$)/g, '')
       ) ?? [];
   }
   visit(n: TSESTree.Node) {
@@ -88,6 +84,9 @@ class ASTVisitor {
       case AST_NODE_TYPES.VariableDeclaration: {
         this.visitVariableDeclaration(n.declaration);
       } break;
+      case AST_NODE_TYPES.FunctionDeclaration: {
+        this.visitFunctionDeclaration(n.declaration);
+      } break;
       default: {
         console.error(n.declaration?.type);
       };
@@ -113,35 +112,37 @@ class ASTVisitor {
         name += n.id.name;
       } break;
     }
-    
-    const comments = this.getNodeComments(n);
-    if (comments.length === 0) {
-      this.setLastNode(n);
-      return;
-    }
-    
     this.docs[0].members.set(name, []);
     switch (n.init?.type) {
       case AST_NODE_TYPES.ArrowFunctionExpression: {
         this.docs[0].members.get(name)?.push({
-          type: 'function',
           ...this.getFunctionExpressionDoc(n.init),
-          docs: comments,
+          docs: this.getNodeComments(n),
+          kind: 'method',
         })
       } break;
-      case AST_NODE_TYPES.CallExpression: {
-        // Handle exported constants like $keys, $values, $strict
+      default: {
         this.docs[0].members.get(name)?.push({
-          type: 'constant',
           args: [],
           returnType: '',
-          docs: comments,
+          docs: this.getNodeComments(n),
+          kind: 'const',
         });
-      } break;
+      }
     }
     this.setLastNode(n);
   }
   visitTSInterfaceDeclaration(n: TSESTree.TSInterfaceDeclaration) {
+    this.setLastNode(n);
+  }
+  visitFunctionDeclaration(n: TSESTree.FunctionDeclaration) {
+    const name = n.id?.name ?? '';
+    this.docs[0].members.set(name, []);
+    this.docs[0].members.get(name)?.push({
+      ...this.getFunctionExpressionDoc(n),
+      docs: this.getNodeComments(n),
+      kind: 'method',
+    });
     this.setLastNode(n);
   }
   visitClassDeclaration(n: TSESTree.ClassDeclaration) {
@@ -174,7 +175,7 @@ class ASTVisitor {
     this.setLastNode(n);
   }
 
-  getFunctionExpressionDoc(n: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | TSESTree.ArrowFunctionExpression) {
+  getFunctionExpressionDoc(n: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | TSESTree.ArrowFunctionExpression | TSESTree.FunctionDeclaration) {
     return {
       args: n.params.map(param => {
         try {
@@ -204,6 +205,10 @@ class ASTVisitor {
   }
 
   visitMethodDefinition(n: TSESTree.MethodDefinition) {
+    if (n.kind === 'constructor') {
+      this.setLastNode(n);
+      return;
+    }
     let name = ``;
     switch (n.key.type) {
       case AST_NODE_TYPES.Identifier: {
@@ -216,6 +221,9 @@ class ASTVisitor {
         if (n.key.property.type === AST_NODE_TYPES.Identifier) {
           name += `.${n.key.property.name}`;
         }
+        if (name.startsWith('Symbol.')) {
+          name = `[${name}]`;
+        }
       } break;
     }
     const members = this.docs[this.docs.length - 1].members;
@@ -223,52 +231,81 @@ class ASTVisitor {
       members.set(name, []);
     }
     members.get(name)?.push({
-      type: 'function',
       ...this.getFunctionExpressionDoc(n.value),
       docs: this.getNodeComments(n),
+      kind: n.kind === 'get' ? 'get' : n.kind === 'set' ? 'set' : 'method',
     });
     this.setLastNode(n);
   }
 }
 
-const ast = parse(sourceCode, {
-  comment: true,
-  range: true,
-  loc: true,
-});
-const visitor = new ASTVisitor();
 
-visitor.visitProgram(ast);
+const contents: string[] = [];
+const docs: string[] = [];
 
-const normalize = (name: string) => name.replace(/[\s-]+/g, '-').replace(/[^\w-]+/g, '').toLowerCase();
+for (const file of files) {
+  const sourceCode = await readFile(`${cwd}/${file}`, 'utf-8');
+  const ast = parse(sourceCode, {
+    comment: true,
+    range: true,
+    loc: true,
+  });
+  const visitor = new ASTVisitor();
+  visitor.visitProgram(ast);
 
-visitor.docs.push(visitor.docs.shift()!);
+  const normalize = (name: string) => name.replace(/[\s-]+/g, '-').replace(/[^\w-]+/g, '').toLowerCase();
 
-const templateData = {
-  namespaces: visitor.docs.filter(doc => doc.docs.every(doc => !doc.includes('@internal'))).map(doc => ({
-    name: doc.name,
-    docs: doc.docs,
-    members: Array.from(doc.members.entries()).filter(([, members]) => 
-      members.every(member => member.docs.every(doc => !doc.includes('@internal')))
-    ).map(([key, members]) => ({ key, members })),
-    normalize: (name: string) => name.replace(/[\s-]+/g, '-').replace(/[^\w-]+/g, '').toLowerCase()
-  })),
-  normalize
-};
+  visitor.docs.push(visitor.docs.shift()!);
 
-Handlebars.registerHelper('normalize', normalize);
-Handlebars.registerHelper('eq', (a, b) => a === b);
-Handlebars.registerHelper('makeAnchor', (key, members) => {
-  if (!members || members.length === 0) return normalize(key);
-  const member = members[0];
-  const title = member.type === 'function' 
-    ? `${key}(${member.args ? member.args.join(', ') : ''})${member.returnType || ''}`
-    : key;
-  return normalize(title);
-});
+  for (const doc of visitor.docs.filter(doc => doc.docs.every(doc => !doc.includes('@internal')))) {
+    const level = doc.name === `` ? 0 : 1;
+    const header = `#`.repeat(level + 2);
+    const padding = ` `.repeat(level * 2);
+    const namespace = normalize(doc.name);
+    if (level !== 0) {
+      contents.push(`- [\`${doc.name}\`](#${namespace})`);
+      docs.push(
+        `${header} \`${doc.name}\``,
+        '',
+        `${doc.docs.join('\n')}`,
+        '',
+      );
+    }
 
-const templateSource = await readFile(`${process.cwd()}/docs/template.hbs`, 'utf-8');
-const template = Handlebars.compile(templateSource);
-const output = template(templateData);
+    for (const [name, members] of doc.members.entries()) {
+      if (members.every(member => member.docs.every(doc => !doc.includes('@internal')))) {
+        for (const member of members) {
+          let title = member.kind === 'const'
+            ? name
+            : member.kind === 'get'
+              ? `${name}${member.returnType}`
+              : `${name}(${member.args.join(', ')})${member.returnType}`;
+          if (doc.name) {
+            const separator = name.startsWith('[') ? '' : '.';
+            title = `${doc.name}${separator}${title}`;
+          }
+          contents.push(`${padding}- [\`${title}\`](#${normalize(title)})`);
+          docs.push(`${header}# \`${title}\``);
+        }
+        for (const member of members) {
+          docs.push(
+            '',
+            `${member.docs.join('\n')}`,
+          );
+        }
+      }
+    }
+  }
+}
 
-await writeFile(`${process.cwd()}/docs/index.md`, output);
+const sanitize = (text: string) => text.replace(/\n\n\n/g, '\n');
+const toc = '- [API](#api)\n' + sanitize(contents.join('\n')).replace(/^/gm, '  ');
+const reference = '## API\n\n' + sanitize(docs.join('\n'));
+
+const readme = await readFile(`${cwd}/README.md`, 'utf-8');
+const combined = readme
+  .replace(/^(- \[Documentation\].*)<!--API_TOC-->$/m, toc)
+  .replace(/<!--API_REFERENCE-->/, reference)
+  .replace(/\.\/docs\/logo\.svg/g, './logo.svg');
+
+await writeFile(`${cwd}/docs/index.md`, combined);

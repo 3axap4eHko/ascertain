@@ -151,6 +151,13 @@ export const discriminated = <T>(schemas: Schema<T>[], key: string): Discriminat
   return new DiscriminatedCtor(schemas, key);
 };
 
+/**
+ * Creates a custom validation check.
+ * Accepts a predicate function or an object with a compile method for inlined checks.
+ *
+ * @param fnOrOpts - A predicate function `(value) => boolean` or an object with a `compile` method for code-generating checks.
+ * @param message - Optional custom error message.
+ */
 export const check = (
   fnOrOpts: ((v: unknown) => boolean) | { compile: (value: string, ctx: CheckContext) => { check: string; message: string } },
   message?: string,
@@ -167,54 +174,106 @@ export const check = (
   return new CheckCtor(fnOrOpts.compile);
 };
 
+/**
+ * Validates that a numeric value is greater than or equal to `n`.
+ *
+ * @param n - The minimum allowed value (inclusive).
+ * @param message - Optional custom error message.
+ */
 export const min = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v} < ${n}`,
     message: message ? JSON.stringify(message) : `\`must be >= ${n}, got \${${v}}\``,
   }));
 
+/**
+ * Validates that a numeric value is less than or equal to `n`.
+ *
+ * @param n - The maximum allowed value (inclusive).
+ * @param message - Optional custom error message.
+ */
 export const max = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v} > ${n}`,
     message: message ? JSON.stringify(message) : `\`must be <= ${n}, got \${${v}}\``,
   }));
 
+/**
+ * Validates that a value is an integer.
+ *
+ * @param message - Optional custom error message.
+ */
 export const integer = (message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `!Number.isInteger(${v})`,
     message: message ? JSON.stringify(message) : `\`must be an integer, got \${${v}}\``,
   }));
 
+/**
+ * Validates that a value's length is greater than or equal to `n`.
+ *
+ * @param n - The minimum allowed length (inclusive).
+ * @param message - Optional custom error message.
+ */
 export const minLength = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v}.length < ${n}`,
     message: message ? JSON.stringify(message) : `\`length must be >= ${n}, got \${${v}.length}\``,
   }));
 
+/**
+ * Validates that a value's length is less than or equal to `n`.
+ *
+ * @param n - The maximum allowed length (inclusive).
+ * @param message - Optional custom error message.
+ */
 export const maxLength = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v}.length > ${n}`,
     message: message ? JSON.stringify(message) : `\`length must be <= ${n}, got \${${v}.length}\``,
   }));
 
+/**
+ * Validates that a numeric value is strictly greater than `n`.
+ *
+ * @param n - The exclusive lower bound.
+ * @param message - Optional custom error message.
+ */
 export const gt = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v} <= ${n}`,
     message: message ? JSON.stringify(message) : `\`must be > ${n}, got \${${v}}\``,
   }));
 
+/**
+ * Validates that a numeric value is strictly less than `n`.
+ *
+ * @param n - The exclusive upper bound.
+ * @param message - Optional custom error message.
+ */
 export const lt = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v} >= ${n}`,
     message: message ? JSON.stringify(message) : `\`must be < ${n}, got \${${v}}\``,
   }));
 
+/**
+ * Validates that a numeric value is a multiple of `n`.
+ *
+ * @param n - The divisor to check against.
+ * @param message - Optional custom error message.
+ */
 export const multipleOf = (n: number, message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `${v} % ${n} !== 0`,
     message: message ? JSON.stringify(message) : `\`must be a multiple of ${n}, got \${${v}}\``,
   }));
 
+/**
+ * Validates that an array contains only unique items.
+ *
+ * @param message - Optional custom error message.
+ */
 export const uniqueItems = (message?: string): CheckShape =>
   new CheckCtor((v) => ({
     check: `new Set(${v}).size !== ${v}.length`,
@@ -223,6 +282,12 @@ export const uniqueItems = (message?: string): CheckShape =>
 
 type EnumLike = { [k: string]: string | number; [n: number]: string };
 
+/**
+ * Validates that a value is one of the allowed values. Accepts an array or an enum-like object.
+ *
+ * @param values - Array of allowed values or an enum-like object.
+ * @param message - Optional custom error message.
+ */
 export const oneOf = <T extends EnumLike>(values: (string | number)[] | T, message?: string): CheckShape => {
   const set = new Set(Array.isArray(values) ? values : Object.values(values));
   return new CheckCtor((v, ctx) => ({
@@ -266,6 +331,11 @@ const TIME_REGEX = /^(\d*\.?\d*)(ms|s|m|h|d|w)?$/;
  */
 export const asError = <T>(message: string) => new TypeError(message) as unknown as T;
 
+/**
+ * Type casting utilities for parsing strings into typed values.
+ * Useful for environment variables, query parameters, and other string inputs.
+ * Returns a TypeError for invalid values, enabling deferred validation with `ascertain()`.
+ */
 export const as = {
   /**
    * Attempts to convert a value to a string.
@@ -447,6 +517,10 @@ const fnFormat = (fn: (s: string) => boolean, name: string, message?: string): C
     message: message ? JSON.stringify(message) : `\`must be a valid ${name}, got \${${v}}\``,
   }));
 
+/**
+ * String format validators for common patterns (RFC 3339 date-time, email, URI, UUID, etc.).
+ * Each method returns a CheckShape that can be composed with `and()` for schema validation.
+ */
 export const format = {
   dateTime: (message?: string): CheckShape => regexFormat(DATETIME_RE, 'date-time', message),
   date: (message?: string): CheckShape => fnFormat(isValidDate, 'date', message),
@@ -1150,6 +1224,14 @@ interface StandardSchemaFn<T> {
   '~standard': StandardSchemaV1.Props<T, T>;
 }
 
+/**
+ * Wraps a schema for Standard Schema v1 compliance.
+ * The returned function throws on invalid data and exposes a `~standard` interface
+ * for interoperability with tRPC, TanStack Form, and other ecosystem tools.
+ *
+ * @param schema - The schema to wrap.
+ * @returns A validator function with a `~standard` property conforming to Standard Schema v1.
+ */
 export const standardSchema = <T>(schema: Schema<T>): StandardSchemaFn<T> => {
   const validator = compile(schema);
 

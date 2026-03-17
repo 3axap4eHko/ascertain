@@ -1,8 +1,6 @@
 # Ascertain
 
-### Ascertain what data is not suitable for your library
-
-0-Deps, simple, blazing fast, for browser and Node.js object schema validator
+Zero-dependency, high-performance schema validator for Node.js and browsers.
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][github-image]][github-url]
@@ -10,110 +8,607 @@
 [![Downloads][downloads-image]][npm-url]
 [![Snyk][snyk-image]][snyk-url]
 
+## Table of Contents
+
+- [Features](#features)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Performance](#performance)
+- [Schema Reference](#schema-reference)
+- [Type Casting](#type-casting)
+- [Patterns](#patterns)
+- [Compile Options](#compile-options)
+- [Standard Schema](#standard-schema)
+- [Complete Example](#complete-example)
+- [API](#api)
+  - [`$keys`](#keys)
+  - [`$values`](#values)
+  - [`$strict`](#strict)
+  - [`or(...schemas: Schema[]): OrShape`](#orschemas-schema-orshape)
+  - [`and(...schemas: Schema[]): AndShape`](#andschemas-schema-andshape)
+  - [`optional(schema: Schema): OptionalShape`](#optionalschema-schema-optionalshape)
+  - [`tuple(...schemas: Schema[]): TupleShape`](#tupleschemas-schema-tupleshape)
+  - [`discriminated(schemas: Schema[], key: string): DiscriminatedShape`](#discriminatedschemas-schema-key-string-discriminatedshape)
+  - [`check(fnOrOpts, message?: string): CheckShape`](#checkfnoropts-message-string-checkshape)
+  - [`min(n: number, message?: string): CheckShape`](#minn-number-message-string-checkshape)
+  - [`max(n: number, message?: string): CheckShape`](#maxn-number-message-string-checkshape)
+  - [`integer(message?: string): CheckShape`](#integermessage-string-checkshape)
+  - [`minLength(n: number, message?: string): CheckShape`](#minlengthn-number-message-string-checkshape)
+  - [`maxLength(n: number, message?: string): CheckShape`](#maxlengthn-number-message-string-checkshape)
+  - [`gt(n: number, message?: string): CheckShape`](#gtn-number-message-string-checkshape)
+  - [`lt(n: number, message?: string): CheckShape`](#ltn-number-message-string-checkshape)
+  - [`multipleOf(n: number, message?: string): CheckShape`](#multipleofn-number-message-string-checkshape)
+  - [`uniqueItems(message?: string): CheckShape`](#uniqueitemsmessage-string-checkshape)
+  - [`oneOf(values: string | number[] | T, message?: string): CheckShape`](#oneofvalues-string--number--t-message-string-checkshape)
+  - [`fromBase64`](#frombase64)
+  - [`asError(message: string)`](#aserrormessage-string)
+  - [`as`](#as)
+  - [`format`](#format)
+  - [`compile(schema: Schema, options?: CompileOptions): Validator`](#compileschema-schema-options-compileoptions-validator)
+  - [`ascertain(schema: Schema, data: T)`](#ascertainschema-schema-data-t)
+  - [`createValidator(config: C)`](#createvalidatorconfig-c)
+  - [`standardSchema(schema: Schema): StandardSchemaFn`](#standardschemaschema-schema-standardschemafn)
+- [License](#license)
+
 ## Features
 
-- Type-safe validation: Ensures your data conforms to predefined schemas.
-- Composite schemas: Supports logical AND, OR, and optional schemas.
-- Type casting: Automatically parses and casts strings to other types.
-- Error handling: Provides detailed error messages for invalid data.
+- **Zero dependencies** - Minimal footprint, no external dependencies
+- **High performance** - Compiles schemas to optimized JS functions (~6x faster than dynamic validation)
+- **Type-safe** - Full TypeScript support with type inference
+- **Flexible schemas** - AND, OR, optional, tuple, discriminated operators
+- **Type casting** - Built-in parsers for numbers (hex, octal, binary), dates, JSON, base64
+- **Object validation** - Validate keys/values with `$keys`, `$values`, `$strict`
+- **Partial validation** - `createValidator` validates subsets with type narrowing
+- **Detailed errors** - Clear error messages with paths for debugging
+- **Standard Schema v1** - Interoperable with tRPC, TanStack Form, and other ecosystem tools
 
-## Schema description
+## Install
 
- - Primitive Values: Any primitive value (e.g., string, number, bigint, boolean, undefined, symbol, null) is used as an expected constant to match against.
- - Function Types: Functions are used as constructors for non-objects and instance types for object types.
- - Array Values: Arrays are used to represent an expected array type, where every item in the array must match the specified type (acting as an "and" operator).
- - Regular Expressions: Regular expressions are used to validate that a value matches a specified string pattern.
- - Object Types: Non-null objects are used as templates for expected properties, where each property of the object must match the corresponding schema definition.
+```bash
+npm install ascertain
+```
+
+## Quick Start
+
+```typescript
+import { ascertain, or, optional } from 'ascertain';
+
+ascertain({
+  name: String,
+  age: Number,
+  role: or('admin', 'user'),
+  email: optional(String),
+}, userData);
+```
+
+## Performance
+
+Ascertain compiles schemas into optimized JavaScript functions. Compiled validators run **~6x faster** than dynamic validation.
+
+```typescript
+import { compile } from 'ascertain';
+
+// Compile once
+const validateUser = compile(userSchema);
+
+// Validate many (no recompilation)
+validateUser(user1);
+validateUser(user2);
+```
+
+| When to use | Function | Speed |
+|-------------|----------|-------|
+| Repeated validation (API handlers, loops) | `compile()` | Fastest |
+| One-off validation | `ascertain()` | Convenient |
+
+### Benchmark
+
+| Library | Mode | Valid (ops/s) | Invalid (ops/s) |
+|---------|------|---------------|-----------------|
+| **Ascertain** | first-error | 80M | 41M |
+| **Ascertain** | all-errors | 80M | 25M |
+| AJV | first-error | 52M | 35M |
+| AJV | all-errors | 52M | 20M |
+| Zod | all-errors | 34M | 77K |
+
+Benchmark source: [`benchmarks/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/benchmarks/benchmark.ts)
+
+Run it locally:
+
+```bash
+pnpm build
+pnpm bench
+```
+
+Notes:
+
+- Maintainer-run benchmark, not an independent study
+- Measures valid and invalid paths for compiled validators
+- Compares the current checkout, published `ascertain`, AJV, and Zod
+- Results vary by CPU, Node.js version, and workload, so treat the numbers as directional
+
+## Schema Reference
+
+| Schema | Validates | Example |
+|--------|-----------|---------|
+| `String`, `Number`, `Boolean` | Type check | `{ age: Number }` |
+| `Date`, `Array`, `Object` | Instance check | `{ created: Date }` |
+| `Function` | Any callable | `{ handler: Function }` |
+| Primitives | Exact value | `{ status: 'active' }` |
+| RegExp | Pattern match | `{ email: /^.+@.+$/ }` |
+| `[Schema]` | Array of type | `{ tags: [String] }` |
+| `{ key: Schema }` | Object shape | `{ user: { name: String } }` |
+| `or(a, b, ...)` | Any match | `or(String, Number)` |
+| `and(a, b, ...)` | All match | `and(Date, { toJSON: Function })` |
+| `optional(s)` | Nullable | `optional(String)` |
+| `tuple(a, b)` | Fixed array | `tuple(Number, Number)` |
+| `discriminated(schemas, key)` | Tagged union | `discriminated([{ type: 'a' }, { type: 'b' }], 'type')` |
+
+### Special Symbols
+
+```typescript
+import { $keys, $values, $strict } from 'ascertain';
+
+const schema = {
+  [$keys]: /^[a-z]+$/,   // Validate all keys
+  [$values]: Number,      // Validate all values
+  [$strict]: true,        // No extra properties
+};
+```
+
+## Type Casting
+
+Parse strings into typed values (environment variables, query params):
+
+```typescript
+import { as } from 'ascertain';
+
+as.number('42')        // 42
+as.number('3.14')      // 3.14
+as.number('0xFF')      // 255 (hex)
+as.number('0o77')      // 63 (octal)
+as.number('0b1010')    // 10 (binary)
+as.number('1e10')      // 10000000000
+
+as.boolean('true')     // true
+as.boolean('1')        // true
+
+as.time('500ms')       // 500
+as.time('30s')         // 30000
+as.time('5m')          // 300000
+as.time('2h')          // 7200000
+as.time('1d')          // 86400000
+
+as.date('2024-12-31')  // Date object
+as.array('a,b,c', ',') // ['a', 'b', 'c']
+as.json('{"x":1}')     // { x: 1 }
+as.base64('dGVzdA==')  // 'test'
+```
+
+Invalid values return `TypeError` for deferred validation:
+
+```typescript
+const config = {
+  port: as.number(process.env.PORT),  // TypeError if invalid
+  host: as.string(process.env.HOST),
+};
+
+// Errors surface with clear paths
+ascertain({ port: Number, host: String }, config);
+// → TypeError: "Invalid value undefined, expected a string"
+```
+
+## Patterns
+
+### Batch Validation
+
+Compile once, validate many:
+
+```typescript
+const validateUser = compile(userSchema);
+
+const results = users.map((user, i) => {
+  if (validateUser(user)) {
+    return { index: i, valid: true };
+  }
+  return { index: i, valid: false, error: validateUser.issues[0].message };
+});
+```
+
+### Discriminated Unions
+
+Use `discriminated()` for efficient tagged union validation. Instead of trying each variant like `or()`, it checks the discriminant field first and only validates the matching variant:
+
+```typescript
+import { compile, discriminated } from 'ascertain';
+
+const messageSchema = discriminated([
+  { type: 'email', address: String },
+  { type: 'sms', phone: String },
+  { type: 'push', token: String },
+], 'type');
+
+const validate = compile(messageSchema);
+
+validate({ type: 'email', address: 'user@example.com' }); // true
+validate({ type: 'sms', phone: '123456' });                // true
+validate({ type: 'push', token: 123 });                    // false
+validate({ type: 'unknown' });                             // false
+```
+
+Discriminant values must be string, number, or boolean literals.
+
+### Conditional Rules
+
+Use `or()` and `and()` for complex conditions:
+
+```typescript
+const schema = {
+  type: or('email', 'sms'),
+  // Conditional: email requires address, sms requires phone
+  contact: or(
+    and({ type: 'email' }, { address: String }),
+    and({ type: 'sms' }, { phone: String }),
+  ),
+};
+```
+
+### Schema Composition
+
+Build schemas from reusable parts:
+
+```typescript
+const addressSchema = {
+  street: String,
+  city: String,
+  zip: /^\d{5}$/,
+};
+
+const personSchema = {
+  name: String,
+  address: addressSchema,
+};
+
+const companySchema = {
+  name: String,
+  headquarters: addressSchema,
+  employees: [personSchema],
+};
+```
+
+### Versioned Schemas
+
+Version schemas as modules:
+
+```typescript
+// schemas/user.v1.ts
+export const userSchemaV1 = { name: String, email: String };
+
+// schemas/user.v2.ts
+export const userSchemaV2 = {
+  ...userSchemaV1,
+  phone: optional(String),
+  createdAt: Date,
+};
+
+// api/handler.ts
+import { userSchemaV2 } from './schemas/user.v2';
+const validate = compile(userSchemaV2);
+```
+
+### Config Validation
+
+Validate only what each module needs:
+
+```typescript
+import { createValidator, as } from 'ascertain';
+
+const config = {
+  app: { name: as.string(process.env.APP_NAME), port: as.number(process.env.PORT) },
+  db: { host: as.string(process.env.DB_HOST), pool: as.number(process.env.DB_POOL) },
+  cache: { ttl: as.time(process.env.CACHE_TTL) },
+};
+
+const validate = createValidator(config);
+
+// Each module validates only what it needs
+const { db } = validate({
+  db: { host: String, pool: Number },
+});
+
+db.host;   // string - validated and typed
+db.pool;   // number - validated and typed
+// db.xxx  // TypeScript error - property doesn't exist
+
+// cache not validated = not accessible
+// cache.ttl  // TypeScript error - cache not in returned type
+```
+
+## Compile Options
+
+By default `compile()` stops at the first validation error (fastest for invalid data). Pass `{ allErrors: true }` to collect all errors:
+
+```typescript
+import { compile } from 'ascertain';
+
+const schema = { name: String, age: Number, active: Boolean };
+
+// First-error mode (default) - stops at first failure
+const validate = compile(schema);
+if (!validate({ name: 123, age: 'bad', active: 'no' })) {
+  console.log(validate.issues.length); // 1
+  console.log(validate.issues[0].path); // ['name']
+}
+
+// All-errors mode - collects every failure
+const validateAll = compile(schema, { allErrors: true });
+if (!validateAll({ name: 123, age: 'bad', active: 'no' })) {
+  console.log(validateAll.issues.length); // 3
+}
+```
+
+## Standard Schema
+
+Wrap a schema for [Standard Schema v1](https://standardschema.dev/) compliance, enabling interoperability with tRPC, TanStack Form, and other ecosystem libraries:
+
+```typescript
+import { standardSchema, or, optional } from 'ascertain';
+
+const userValidator = standardSchema({
+  name: String,
+  age: Number,
+  role: or('admin', 'user'),
+  email: optional(String),
+});
+
+// Use as regular validator (throws on error)
+userValidator({ name: 'Alice', age: 30, role: 'admin' });
+
+// Use Standard Schema interface (returns result object)
+const result = userValidator['~standard'].validate(unknownData);
+if (result.issues) {
+  console.log(result.issues);
+} else {
+  console.log(result.value);
+}
+```
+
+## Complete Example
+
+```typescript
+import { compile, or, optional, and, tuple, $keys, $values, $strict, as } from 'ascertain';
+
+const schema = {
+  id: Number,
+  name: String,
+  email: /^[^@]+@[^@]+$/,
+  status: or('active', 'inactive', 'pending'),
+  role: optional(or('admin', 'user')),
+
+  profile: {
+    bio: optional(String),
+    avatar: optional(String),
+  },
+
+  settings: {
+    [$keys]: /^[a-z_]+$/,
+    [$values]: or(String, Number, Boolean),
+    [$strict]: true,
+  },
+
+  coordinates: optional(tuple(Number, Number)),
+  createdAt: and(Date, { toISOString: Function }),
+
+  retries: as.number(process.env.MAX_RETRIES),
+  timeout: as.time(process.env.TIMEOUT),
+};
+
+const validate = compile(schema);
+if (!validate(data)) {
+  console.error(validate.issues);
+}
+```
 
 ## API
-
-- [`$keys`](#keys)
-- [`$values`](#values)
-- [`$strict`](#strict)
-- [`or(...schemas: Schema[])`](#orschemas-schema)
-- [`and(...schemas: Schema[])`](#andschemas-schema)
-- [`optional(schema: Schema)`](#optionalschema-schema)
-- [`tuple(...schemas: Schema[])`](#tupleschemas-schema)
-- [`compile(schema: Schema, rootName: string)`](#compileschema-schema-rootname-string)
-- [`ascertain(schema: Schema, data: T, rootName = "[root]")`](#ascertainschema-schema-data-t-rootname--root)
 
 ### `$keys`
 
  Symbol for validating object keys against a schema.
  
-
 ### `$values`
 
  Symbol for validating object values against a schema.
  
-
 ### `$strict`
 
  Symbol for enforcing strict object validation (no extra properties allowed).
  
-
-### `or(...schemas: Schema[])`
+### `or(...schemas: Schema[]): OrShape`
 
  Operator for validating data against any of the provided schemas (logical OR).
-
- Creates a schema that accepts data matching any one of the provided schemas.
- This is useful for creating union types or alternative validation paths.
-
-- @template T - The type of data the operator validates.
-- @param schemas - Multiple schemas where at least one must match the data.
-- @returns A schema that validates data against any of the provided schemas.
  
-
-### `and(...schemas: Schema[])`
+### `and(...schemas: Schema[]): AndShape`
 
  Operator for validating data against all provided schemas (logical AND).
-
- Creates a schema that requires data to match every one of the provided schemas.
- This is useful for combining multiple validation requirements or adding constraints.
-
-- @template T - The type of data the operator validates.
-- @param schemas - Multiple schemas that all must match the data.
-- @returns A schema that validates data against all of the provided schemas.
  
-
-### `optional(schema: Schema)`
+### `optional(schema: Schema): OptionalShape`
 
  Operator for making a schema optional (nullable).
-
- Creates a schema that accepts the provided schema or null/undefined values.
- This is useful for optional object properties or nullable fields.
-
-- @template T - The type of data the operator validates.
-- @param schema - The schema to make optional.
-- @returns A schema that validates data against the provided schema or accepts null/undefined.
  
-
-### `tuple(...schemas: Schema[])`
+### `tuple(...schemas: Schema[]): TupleShape`
 
  Operator for validating data against a fixed-length tuple of schemas.
-
- Creates a schema that validates arrays with a specific length and type for each position.
- This is useful for coordinate pairs, RGB values, or any fixed-structure data.
-
-- @template T - The type of data the operator validates (a tuple of types).
-- @param schemas - Schemas for each position in the tuple, in order.
-- @returns A schema that validates data as a tuple with the specified structure.
  
+### `discriminated(schemas: Schema[], key: string): DiscriminatedShape`
 
-### `compile(schema: Schema, rootName: string)`
+ Operator for validating data against a discriminated union.
 
- Compiles a schema into a validation function.
+ Optimizes validation by checking the discriminant field first and only
+ validating the matching variant. More efficient than `or()` for unions
+ where each variant has a common field with a unique literal value.
 
- This function takes a schema definition and generates a JavaScript function
- that can be used to validate data against the schema.
+- @param schemas - Array of object schemas, each with a discriminant field containing a literal value.
+- @param key - The name of the discriminant field present in all variants.
+
+- @example
+ ```typescript
+ const messageSchema = discriminated([
+   { type: 'email', address: String },
+   { type: 'sms', phone: String },
+   { type: 'push', token: String },
+ ], 'type');
+ ```
+ 
+### `check(fnOrOpts, message?: string): CheckShape`
+
+ Creates a custom validation check.
+ Accepts a predicate function or an object with a compile method for inlined checks.
+
+- @param fnOrOpts - A predicate function `(value) => boolean` or an object with a `compile` method for code-generating checks.
+- @param message - Optional custom error message.
+ 
+### `min(n: number, message?: string): CheckShape`
+
+ Validates that a numeric value is greater than or equal to `n`.
+
+- @param n - The minimum allowed value (inclusive).
+- @param message - Optional custom error message.
+ 
+### `max(n: number, message?: string): CheckShape`
+
+ Validates that a numeric value is less than or equal to `n`.
+
+- @param n - The maximum allowed value (inclusive).
+- @param message - Optional custom error message.
+ 
+### `integer(message?: string): CheckShape`
+
+ Validates that a value is an integer.
+
+- @param message - Optional custom error message.
+ 
+### `minLength(n: number, message?: string): CheckShape`
+
+ Validates that a value's length is greater than or equal to `n`.
+
+- @param n - The minimum allowed length (inclusive).
+- @param message - Optional custom error message.
+ 
+### `maxLength(n: number, message?: string): CheckShape`
+
+ Validates that a value's length is less than or equal to `n`.
+
+- @param n - The maximum allowed length (inclusive).
+- @param message - Optional custom error message.
+ 
+### `gt(n: number, message?: string): CheckShape`
+
+ Validates that a numeric value is strictly greater than `n`.
+
+- @param n - The exclusive lower bound.
+- @param message - Optional custom error message.
+ 
+### `lt(n: number, message?: string): CheckShape`
+
+ Validates that a numeric value is strictly less than `n`.
+
+- @param n - The exclusive upper bound.
+- @param message - Optional custom error message.
+ 
+### `multipleOf(n: number, message?: string): CheckShape`
+
+ Validates that a numeric value is a multiple of `n`.
+
+- @param n - The divisor to check against.
+- @param message - Optional custom error message.
+ 
+### `uniqueItems(message?: string): CheckShape`
+
+ Validates that an array contains only unique items.
+
+- @param message - Optional custom error message.
+ 
+### `oneOf(values: string | number[] | T, message?: string): CheckShape`
+
+ Validates that a value is one of the allowed values. Accepts an array or an enum-like object.
+
+- @param values - Array of allowed values or an enum-like object.
+- @param message - Optional custom error message.
+ 
+### `fromBase64`
+
+ Decodes a base64-encoded string to UTF-8.
+
+ Uses `Buffer` in Node.js environments and `atob` in browsers.
+
+- @param value - The base64-encoded string to decode.
+- @returns The decoded UTF-8 string.
+ 
+### `asError(message: string)`
+
+ Creates a TypeError with the given message, typed as T for deferred error handling.
+
+ Used by `as.*` conversion utilities to return errors that can be caught
+ during schema validation rather than throwing immediately.
+
+- @template T - The expected return type (for type compatibility with conversion functions).
+- @param message - The error message.
+- @returns A TypeError instance typed as T.
+ 
+### `as`
+
+ Type casting utilities for parsing strings into typed values.
+ Useful for environment variables, query parameters, and other string inputs.
+ Returns a TypeError for invalid values, enabling deferred validation with `ascertain()`.
+ 
+### `format`
+
+ String format validators for common patterns (RFC 3339 date-time, email, URI, UUID, etc.).
+ Each method returns a CheckShape that can be composed with `and()` for schema validation.
+ 
+### `compile(schema: Schema, options?: CompileOptions): Validator`
+
+ Compiles a schema into a high-performance validation function.
+
+ By default uses first-error mode which stops at the first validation failure
+ and returns immediately. This provides optimal performance for invalid data.
+
+ Set `allErrors: true` to collect all validation errors (slower but more informative).
 
 - @template T - The type of data the schema validates.
 - @param schema - The schema to compile.
-- @param rootName - A name for the root of the data structure (used in error messages).
-- @returns A validation function that takes data as input and throws a TypeError if the data does not conform to the schema.
- 
+- @param options - Optional configuration (allErrors: boolean).
+- @returns A validator function that returns boolean. Access `.issues` for error details.
 
-### `ascertain(schema: Schema, data: T, rootName = "[root]")`
+- @example
+ ```typescript
+ import { compile, optional, or } from 'ascertain';
+
+ const userSchema = {
+   name: String,
+   age: Number,
+   email: optional(String),
+   role: or('admin', 'user', 'guest')
+ };
+
+ // First-error mode (default) - fastest for invalid data
+ const validate = compile(userSchema);
+
+ // All-errors mode - collects all validation issues
+ const validateAll = compile(userSchema, { allErrors: true });
+
+ // Valid data
+ if (validate({ name: 'John', age: 30, role: 'user' })) {
+   console.log('Valid!');
+ }
+
+ // Invalid data - check .issues for details
+ if (!validate({ name: 123, age: 'thirty' })) {
+   console.log(validate.issues); // Array with first validation issue
+ }
+ ```
+ 
+### `ascertain(schema: Schema, data: T)`
 
  Asserts that data conforms to a given schema.
 
@@ -123,167 +618,104 @@
 - @template T - The type of data the schema validates.
 - @param schema - The schema to validate against.
 - @param data - The data to validate.
-- @param rootName - A name for the root of the data structure (used in error messages, defaults to '[root]').
 - @throws `{TypeError}` If the data does not conform to the schema.
+
+- @example
+ ```typescript
+ import { ascertain, optional, and, or } from 'ascertain';
+
+ const userSchema = {
+   name: String,
+   age: Number,
+   email: optional(String),
+   active: Boolean
+ };
+
+ const userData = {
+   name: 'Alice',
+   age: 25,
+   email: 'alice-@example.com',
+   active: true
+ };
+
+ // Validate data - throws if invalid, otherwise continues silently
+ ascertain(userSchema, userData);
+ console.log('User data is valid!');
+
+ // Example with invalid data
+ try {
+   ascertain(userSchema, {
+     name: 'Bob',
+     age: 'twenty-five', // Invalid: should be number
+     active: true
+   });
+ } catch (error) {
+   console.error('Validation failed:', error.message);
+ }
+ ```
+
+- @example
+ ```typescript
+ // Array validation
+ const numbersSchema = [Number];
+ const numbers = [1, 2, 3, 4, 5];
+
+ ascertain(numbersSchema, numbers);
+
+ // Tuple validation
+ const coordinateSchema = tuple(Number, Number);
+ const point = [10, 20];
+
+ ascertain(coordinateSchema, point);
+ ```
+ 
+### `createValidator(config: C)`
+
+ Creates a typed validator function for a config object.
+
+ Returns a function that validates a schema against the config and returns
+ the same config reference with a narrowed type containing only the validated fields.
+
+- @template C - The type of the config object.
+- @param config - The config object to validate against.
+- @returns A validator function that takes a schema and returns the typed config subset.
+
+- @example
+ ```typescript
+ import { createValidator, as } from 'ascertain';
+
+ const config = {
+   app: { name: as.string(process.env.APP_NAME) },
+   kafka: { brokers: as.array(process.env.BROKERS, ',') },
+   redis: { host: as.string(process.env.REDIS_HOST) },
+ };
+
+ const validate = createValidator(config);
+
+ // Consumer only validates what it needs
+ const { app, kafka } = validate({
+   app: { name: String },
+   kafka: { brokers: [String] },
+ });
+
+ // app.name is typed as string
+ // kafka.brokers is typed as string[]
+ // redis is not accessible - TypeScript error
+ ```
+ 
+### `standardSchema(schema: Schema): StandardSchemaFn`
+
+ Wraps a schema for Standard Schema v1 compliance.
+ The returned function throws on invalid data and exposes a `~standard` interface
+ for interoperability with tRPC, TanStack Form, and other ecosystem tools.
+
+- @param schema - The schema to wrap.
+- @returns A validator function with a `~standard` property conforming to Standard Schema v1.
  
 
-
-## Usage Example
-
-### Schema compilation
-```typescript
-import { compile, optional, and, or, $keys, $values, Schema, as } from 'ascertain';
-
-const validate = compile({
-  number: Number,
-  string: String,
-  boolean: Boolean,
-  function: Function,
-  array: Array,
-  object: Object,
-  date: and(Date, { toJSON: Function }),
-  regexp: /regexp/,
-  oneOfValue: or(1, 2, 3),
-  arrayOfNumbers: [Number],
-  objectSchema: {
-    number: Number,
-  },
-  optional: optional({
-    number: Number,
-  }),
-  keyValue: {
-    [$keys]: /^key[A-Z]/,
-    [$values]: Number
-  },
-  parsedNumber: Number,
-  parsedString: String,
-  parsedBoolean: Boolean,
-  parsedArray: [String],
-  parsedJSON: {
-    number: 1,
-  },
-  parsedBase64: String,
-  parsedTime: 2 * 60 * 1000, // two minutes
-  parsedDate: Date,
-});
-
-```
-
-### Runtime validation
-Create data ascertain
-```typescript
-import { ascertain, optional, and, or, $keys, $values, Schema, as } from 'ascertain';
-
-// create data sample
-const data = {
-  number: 1,
-  string: 'string',
-  boolean: true,
-  function: () => {},
-  array: [],
-  object: {},
-  date: new Date,
-  regexp: 'regexp',
-  oneOfValue: 1,
-  arrayOfNumbers: [1,2,3,4,5],
-  objectSchema: {
-    number: 1,
-  },
-  optional: null,
-  keyValue: {
-    keyOne: 1,
-    keyTwo: 2,
-    keyThree: 3,
-  },
-  // fault tolernat type casting
-  parsedNumber: as.number('1'),
-  parsedString: as.string('string'),
-  parsedBoolean: as.boolean('false'),
-  parsedArray: as.array('1,2,3,4,5', ','),
-  parsedJSON: as.json('{ "number": 1 }'),
-  parsedBase64: as.base64('dGVzdA=='),
-  parsedTime: as.time('2m'),
-  parsedDate: as.date('31-12-2024'),
-};
-
-// create data schema
-const schema: Schema<typeof data> = {
-  number: Number,
-  string: String,
-  boolean: Boolean,
-  function: Function,
-  array: Array,
-  object: Object,
-  date: and(Date, { toJSON: Function }),
-  regexp: /regexp/,
-  oneOfValue: or(1, 2, 3),
-  arrayOfNumbers: [Number],
-  objectSchema: {
-    number: Number,
-  },
-  optional: optional({
-    number: Number,
-  }),
-  keyValue: {
-    [$keys]: /^key[A-Z]/,
-    [$values]: Number
-  },
-  parsedNumber: Number,
-  parsedString: String,
-  parsedBoolean: Boolean,
-  parsedArray: [String],
-  parsedJSON: {
-    number: 1,
-  },
-  parsedBase64: String,
-  parsedTime: 2 * 60 * 1000, // two minutes
-  parsedDate: Date,
-};
-
-// validate
-const validate = ascertain<typeof data>(schema, data, '[DATA]');
-```
-
-### Benchmark VS zod and ajv
-```
-⭐ Script ajv-vs-zod-vs-ascertain.js
-  ⇶ Suite ajv vs zod vs ascertain
-    ➤ Perform benchmark
-      ✓ Measure 500000 zod static schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
-        │ 0.000699 │ 0.000788 │ 0.000996 │ 0.001624 │ 462.602373 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
-      ✓ Measure 500000 zod dynamic schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬─────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total       │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼─────────────┼────────┤
-        │ 0.006248 │ 0.006918 │ 0.007524 │ 0.016948 │ 3780.465563 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴─────────────┴────────┘
-      ✓ Measure 500000 ascertain static schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
-        │ 0.000063 │ 0.000071 │ 0.000098 │ 0.000267 │ 41.673271 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
-      ✓ Measure 500000 ascertain dynamic schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬────────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total      │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼────────────┼────────┤
-        │ 0.000367 │ 0.000415 │ 0.000525 │ 0.001055 │ 239.078129 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴────────────┴────────┘
-      ✓ Measure 500000 ajv compiled schema validation
-        ┌──────────┬──────────┬──────────┬──────────┬───────────┬────────┐
-        │ (index)  │ med      │ p95      │ p99      │ total     │ count  │
-        ├──────────┼──────────┼──────────┼──────────┼───────────┼────────┤
-        │ 0.000063 │ 0.000072 │ 0.000124 │ 0.000307 │ 44.542936 │ 500000 │
-        └──────────┴──────────┴──────────┴──────────┴───────────┴────────┘
-```
-
 ## License
-License [The MIT License](http://opensource.org/licenses/MIT)
-Copyright (c) 2019-2025 Ivan Zakharchanka
+
+[MIT](http://opensource.org/licenses/MIT) - Ivan Zakharchanka
 
 [npm-url]: https://www.npmjs.com/package/ascertain
 [downloads-image]: https://img.shields.io/npm/dw/ascertain.svg?maxAge=43200
