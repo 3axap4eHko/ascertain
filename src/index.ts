@@ -221,6 +221,16 @@ export const uniqueItems = (message?: string): CheckShape =>
     message: message ? JSON.stringify(message) : `\`must have unique items\``,
   }));
 
+type EnumLike = { [k: string]: string | number; [n: number]: string };
+
+export const oneOf = <T extends EnumLike>(values: (string | number)[] | T, message?: string): CheckShape => {
+  const set = new Set(Array.isArray(values) ? values : Object.values(values));
+  return new CheckCtor((v, ctx) => ({
+    check: `!${ctx.ref(set)}.has(${v})`,
+    message: message ? JSON.stringify(message) : `\`must be one of [${[...set].map(toLiteral).join(', ')}], got \${${v}}\``,
+  }));
+};
+
 /**
  * Decodes a base64-encoded string to UTF-8.
  *

@@ -1,4 +1,4 @@
-import { ascertain, compile, optional, and, or, tuple, discriminated, $keys, $values, $strict, as, Schema, createValidator, standardSchema, StandardSchemaV1, CompileOptions, check, min, max, integer, minLength, maxLength, gt, lt, multipleOf, uniqueItems, format, CheckContext } from '../index';
+import { ascertain, compile, optional, and, or, tuple, discriminated, $keys, $values, $strict, as, Schema, createValidator, standardSchema, StandardSchemaV1, CompileOptions, check, min, max, integer, minLength, maxLength, gt, lt, multipleOf, uniqueItems, oneOf, format, CheckContext } from '../index';
 
 const fixture = {
   a: 1,
@@ -1048,6 +1048,55 @@ describe('Ascertain test suite', () => {
         const v = compile(and([Number], uniqueItems()));
         v([1, 1]);
         expect(v.issues[0].message).toContain('must have unique items');
+      });
+    });
+
+    describe('oneOf', () => {
+      it('should accept valid values from array', () => {
+        const v = compile({ dir: oneOf(['up', 'down', 'left', 'right']) });
+        expect(v({ dir: 'up' })).toBe(true);
+        expect(v({ dir: 'right' })).toBe(true);
+      });
+
+      it('should reject invalid values from array', () => {
+        const v = compile({ dir: oneOf(['up', 'down']) });
+        expect(v({ dir: 'diagonal' })).toBe(false);
+        expect(v({ dir: 42 })).toBe(false);
+      });
+
+      it('should accept valid values from enum-like object', () => {
+        const Direction = { Up: 'up', Down: 'down' } as const;
+        const v = compile({ dir: oneOf(Direction) });
+        expect(v({ dir: 'up' })).toBe(true);
+        expect(v({ dir: 'down' })).toBe(true);
+        expect(v({ dir: 'left' })).toBe(false);
+      });
+
+      it('should work with numeric arrays', () => {
+        const v = compile({ status: oneOf([0, 1, 2]) });
+        expect(v({ status: 0 })).toBe(true);
+        expect(v({ status: 3 })).toBe(false);
+      });
+
+      it('should handle reverse-mapped numeric enums', () => {
+        const TSEnum = { Active: 0, Inactive: 1, 0: 'Active', 1: 'Inactive' };
+        const v = compile({ s: oneOf(TSEnum) });
+        expect(v({ s: 0 })).toBe(true);
+        expect(v({ s: 'Active' })).toBe(true);
+        expect(v({ s: 2 })).toBe(false);
+      });
+
+      it('should use custom message', () => {
+        const v = compile({ dir: oneOf(['up', 'down'], 'invalid direction') });
+        v({ dir: 'diagonal' });
+        expect(v.issues[0].message).toBe('invalid direction');
+      });
+
+      it('should use default message', () => {
+        const v = compile({ dir: oneOf(['up', 'down']) });
+        v({ dir: 'diagonal' });
+        expect(v.issues[0].message).toContain('must be one of');
+        expect(v.issues[0].message).toContain('diagonal');
       });
     });
   });
