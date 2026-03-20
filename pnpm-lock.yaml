@@ -57,8 +57,8 @@ importers:
         specifier: ^0.9.0
         version: 0.9.0
       overtake:
-        specifier: ^2.0.1
-        version: 2.0.1
+        specifier: ^2.0.2
+        version: 2.0.2
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
@@ -1911,8 +1911,8 @@ packages:
     resolution: {integrity: sha512-lBX72MWFduWEf7v7uWf5DHp9Jn5BI8bNPGuFgtXMmr2uDz2Gz2749y3am3agSDdkhHPHYmmxEGSKH85ZLGzgXw==}
     engines: {node: '>=20'}
 
-  overtake@2.0.1:
-    resolution: {integrity: sha512-0Cr+XQLPuA2L+jVky/U92ctZ7eUqGpCsuLB1H5IKxM7SnfpYdhV6JPIiE3Eh5VTS78JploIvnNAteFMrMaVIvg==}
+  overtake@2.0.2:
+    resolution: {integrity: sha512-kVuGALgt6VHeIHWReuIsrrpAb96rjyGqu0gcORpqEHhmaT4ZtXPrJZ+9dRec+LNHHoO8124JSLz0CTFm4BHmMw==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -4544,7 +4544,7 @@ snapshots:
       stdin-discarder: 0.3.1
       string-width: 8.2.0
 
-  overtake@2.0.1:
+  overtake@2.0.2:
     dependencies:
       '@swc/core': 1.15.18
       progress: 2.0.3
