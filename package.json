@@ -60,7 +60,7 @@
     "@vuepress/theme-default": "2.0.0-rc.128",
     "ajv": "^8.18.0",
     "ascertain": "latest",
-    "eslint": "^10.2.0",
+    "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "handlebars": "^4.7.9",
