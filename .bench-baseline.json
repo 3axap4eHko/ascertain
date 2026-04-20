@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "timestamp": "2026-04-18T20:15:40.379Z",
+  "results": {
+    "release ascertain/validate first error/simple valid": {
+      "ops": 355366027,
+      "heapUsedKB": 0,
+      "dceWarning": false
+    },
+    "release ascertain/validate first error/simple invalid": {
+      "ops": 67503712,
+      "heapUsedKB": 1871,
+      "dceWarning": false
+    },
+    "release ascertain/validate first error/complex valid": {
+      "ops": 24308425,
+      "heapUsedKB": 0,
+      "dceWarning": false
+    },
+    "release ascertain/validate first error/complex invalid": {
+      "ops": 66858327,
+      "heapUsedKB": 4587,
+      "dceWarning": false
+    },
+    "release ascertain/validate all errors/simple valid": {
+      "ops": 360230547,
+      "heapUsedKB": 0,
+      "dceWarning": false
+    },
+    "release ascertain/validate all errors/simple invalid": {
+      "ops": 33794059,
+      "heapUsedKB": 0,
+      "dceWarning": false
+    },
+    "release ascertain/validate all errors/complex valid": {
+      "ops": 23819164,
+      "heapUsedKB": 0,
+      "dceWarning": false
+    },
+    "release ascertain/validate all errors/complex invalid": {
+      "ops": 3332966,
+      "heapUsedKB": 5760,
+      "dceWarning": false
+    }
+  }
+}

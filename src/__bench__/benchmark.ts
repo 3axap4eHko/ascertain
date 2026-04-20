@@ -17,7 +17,7 @@ const invalidData = () =>
     boolean: 'invalid',
   }));
 
-const suite = benchmark('valid', validData).feed('invalid', invalidData);
+const suite = benchmark('simple valid', validData).feed('simple invalid', invalidData);
 
 const zodTarget = suite.target('zod', async () => {
   const { z } = await import('zod');
@@ -64,30 +64,6 @@ ajvTarget.measure('validate all errors', ({ validateAll }, input) => {
   }
 });
 
-const releaseTarget = suite.target('release ascertain', async () => {
-  const { compile } = await import('ascertain');
-  const schema = {
-    string: String,
-    number: Number,
-    boolean: Boolean,
-  };
-  const validate = compile(schema);
-  const validateAll = compile(schema, { allErrors: true });
-  return { validate, validateAll };
-});
-
-releaseTarget.measure('validate first error', ({ validate }, input) => {
-  if (!validate(input[0])) {
-    validate.issues;
-  }
-});
-
-releaseTarget.measure('validate all errors', ({ validateAll }, input) => {
-  if (!validateAll(input[0])) {
-    validateAll.issues;
-  }
-});
-
 const ascertainTarget = suite.target('current ascertain', async () => {
   const { compile } = await import('../index.js');
   const schema = {
@@ -107,6 +83,30 @@ ascertainTarget.measure('validate first error', ({ validate }, input) => {
 });
 
 ascertainTarget.measure('validate all errors', ({ validateAll }, input) => {
+  if (!validateAll(input[0])) {
+    validateAll.issues;
+  }
+});
+
+const releaseTarget = suite.target('release ascertain', async () => {
+  const { compile } = await import('ascertain-release');
+  const schema = {
+    string: String,
+    number: Number,
+    boolean: Boolean,
+  };
+  const validate = compile(schema);
+  const validateAll = compile(schema, { allErrors: true });
+  return { validate, validateAll };
+});
+
+releaseTarget.measure('validate first error', ({ validate }, input) => {
+  if (!validate(input[0])) {
+    validate.issues;
+  }
+});
+
+releaseTarget.measure('validate all errors', ({ validateAll }, input) => {
   if (!validateAll(input[0])) {
     validateAll.issues;
   }

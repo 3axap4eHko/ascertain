@@ -1,4 +1,4 @@
-import { ascertain, compile, optional, and, or, tuple, discriminated, $keys, $values, $strict, as, Schema, createValidator, standardSchema, StandardSchemaV1, CompileOptions, check, min, max, integer, minLength, maxLength, gt, lt, multipleOf, uniqueItems, oneOf, format, CheckContext } from '../index';
+import { ascertain, compile, optional, and, or, tuple, discriminated, $keys, $values, $strict, as, asError, Schema, createValidator, standardSchema, StandardSchemaV1, CompileOptions, check, min, max, integer, minLength, maxLength, gt, lt, multipleOf, uniqueItems, oneOf, format, CheckContext } from '../index';
 
 const fixture = {
   a: 1,
@@ -96,7 +96,7 @@ describe('Ascertain test suite', () => {
       ['BigInt', { a: BigInt }, fixture, 'expected type BigInt'],
       ['Symbol', { a: Symbol }, fixture, 'expected type Symbol'],
       ['Date', { d: Date }, { d: new Date('nothing') }, 'expected a valid Date'],
-      ['Error', { value: 'test' }, { value: new Error('Invalid test') }, 'Invalid test'],
+      ['asError deferred', { value: 'test' }, { value: asError('Invalid test') }, 'Invalid test'],
       ['Error schema with string', { error: Error }, { error: 'not an error' }, 'expected type Error'],
       ['Error schema with null', { error: Error }, { error: null }, 'expected non-nullable'],
       ['Error schema with number', { error: Error }, { error: 123 }, 'expected type Error'],
@@ -104,7 +104,7 @@ describe('Ascertain test suite', () => {
       ['Array', { e: Array }, fixture, 'expected an instance of Array'],
       ['[]', { e: [] }, fixture, 'expected an instance of Array'],
       ['[String]', { d: [String] }, fixture, 'expected type String'],
-      ['Array [Boolean or String]', { d: [or(Boolean, String)] }, fixture, /expected type (Boolean|String)/],
+      ['Array [Boolean or String]', { d: [or(Boolean, String)] }, fixture, 'expected one of: Boolean, String'],
       ['Tuple [Boolean, String]', { dt: [Boolean, String] }, fixture, /expected type (Boolean|String)/],
       ['Object', { c: Object }, fixture, 'expected type Object'],
       ['Object properties', { e: { d: Number } }, fixture, 'non-nullable'],
@@ -116,14 +116,14 @@ describe('Ascertain test suite', () => {
       ['Undefined', { a: undefined }, fixture, 'expected nullable'],
       ['Optional exists', { c: optional(false) }, fixture, 'expected false'],
       ['And', { c: and(true, false, null) }, fixture, /expected (false|nullable)/],
-      ['Or', { c: or(String, Number) }, fixture, /expected type (String|Number)/],
+      ['Or', { c: or(String, Number) }, fixture, 'expected one of: String, Number'],
       ['Or', or({ e: { f: 2 } }, { g: Array }), fixture, /expected/],
       ['Tuple', { a: tuple(1) }, fixture, 'expected an instance of Array'],
       ['Keys', { e: { [$keys]: Number } }, fixture, 'expected type Number'],
       ['Values', { e: { [$values]: String } }, fixture, 'expected type String'],
       ['Values', { e: { [$strict]: true } }, fixture, 'not allowed'],
       ['Array schema', [Number], {}, 'expected an instance of Array'],
-      ['Array enum schema', [or(Number, String)], [1, '3', false], /expected type (Number|String)/],
+      ['Array enum schema', [or(Number, String)], [1, '3', false], 'expected one of: Number, String'],
       ['Non object target', {}, 2, 'expected an instance of Object'],
       ['Symbol validation wrong type', { sym: Symbol('test') }, { sym: 'not-a-symbol' }, 'expected symbol'],
       ['Symbol validation wrong value', { sym: Symbol('test') }, { sym: Symbol('different') }, 'expected Symbol(test)'],
@@ -250,6 +250,92 @@ describe('Ascertain test suite', () => {
       ['base64', as.base64, undefined],
     ])('Should not throw an error during conversion to %s', (_, convert, value) => {
       expect(() => convert(value!)).not.toThrow();
+    });
+
+    describe('as.data', () => {
+      it('encodes UTF-8 by default', () => {
+        const bytes = as.data('hello');
+        expect(bytes).toBeInstanceOf(Uint8Array);
+        expect(Array.from(bytes)).toEqual([0x68, 0x65, 0x6c, 0x6c, 0x6f]);
+      });
+
+      it('encodes UTF-8 explicitly', () => {
+        const bytes = as.data('a', 'utf-8');
+        expect(Array.from(bytes)).toEqual([0x61]);
+      });
+
+      it('encodes multi-byte UTF-8', () => {
+        const bytes = as.data('\u00e9', 'utf-8');
+        expect(Array.from(bytes)).toEqual([0xc3, 0xa9]);
+      });
+
+      it('decodes hex lowercase', () => {
+        const bytes = as.data('deadbeef', 'hex');
+        expect(Array.from(bytes)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      });
+
+      it('decodes hex uppercase', () => {
+        const bytes = as.data('DEADBEEF', 'hex');
+        expect(Array.from(bytes)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      });
+
+      it('decodes hex with 0x prefix', () => {
+        const bytes = as.data('0xdeadbeef', 'hex');
+        expect(Array.from(bytes)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      });
+
+      it('decodes hex with 0X prefix', () => {
+        const bytes = as.data('0XDEADBEEF', 'hex');
+        expect(Array.from(bytes)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      });
+
+      it('errors on odd-length hex', () => {
+        const result = as.data('abc', 'hex');
+        expect(result).toHaveProperty('message');
+        expect((result as unknown as { message: string }).message).toContain('hex');
+      });
+
+      it('errors on invalid hex digits', () => {
+        const result = as.data('zz', 'hex');
+        expect(result).toHaveProperty('message');
+      });
+
+      it('errors on empty hex', () => {
+        const result = as.data('', 'hex');
+        expect(result).toHaveProperty('message');
+      });
+
+      it('errors on just prefix with no digits', () => {
+        const result = as.data('0x', 'hex');
+        expect(result).toHaveProperty('message');
+      });
+
+      it('decodes base64', () => {
+        const bytes = as.data('aGVsbG8=', 'base64');
+        expect(Array.from(bytes)).toEqual([0x68, 0x65, 0x6c, 0x6c, 0x6f]);
+      });
+
+      it('errors on invalid base64', () => {
+        const result = as.data('###', 'base64');
+        expect(result).toHaveProperty('message');
+      });
+
+      it('errors on non-string input', () => {
+        const result = as.data(undefined);
+        expect(result).toHaveProperty('message');
+      });
+
+      it('surfaces error via validator pipeline', () => {
+        const v = compile({ bytes: Uint8Array });
+        const bad = { bytes: as.data('zz', 'hex') };
+        expect(v(bad)).toBe(false);
+        expect(v.issues[0].path).toEqual(['bytes']);
+      });
+
+      it('valid bytes pass validator', () => {
+        const v = compile({ bytes: Uint8Array });
+        expect(v({ bytes: as.data('deadbeef', 'hex') })).toBe(true);
+      });
     });
   });
 
@@ -511,6 +597,23 @@ describe('Ascertain test suite', () => {
       expect(validate.issues[0].path).toEqual(['user', 'name']);
     });
 
+    it('should handle nested errors after valid sibling properties in first-error mode', () => {
+      const validate = compile({
+        ok: Number,
+        user: { name: String, age: Number },
+        done: Boolean,
+      });
+      const result = validate({
+        ok: 1,
+        user: { name: 123, age: 'invalid' },
+        done: true,
+      });
+
+      expect(result).toBe(false);
+      expect(validate.issues.length).toBe(1);
+      expect(validate.issues[0].path).toEqual(['user', 'name']);
+    });
+
     it('should handle nested errors with allErrors: true', () => {
       const validate = compile({ user: { name: String, age: Number } }, { allErrors: true });
       const result = validate({ user: { name: 123, age: 'invalid' } });
@@ -549,7 +652,7 @@ describe('Ascertain test suite', () => {
       const result = validate({ value: true });
 
       expect(result).toBe(false);
-      expect(validate.issues.length).toBeGreaterThan(1);
+      expect(validate.issues.length).toBe(1);
     });
 
     it('should handle AND operator in first-error mode', () => {
@@ -1469,6 +1572,516 @@ describe('Ascertain test suite', () => {
         v({ user: { email: 'bad' } });
         expect(v.issues[0].path).toEqual(['user', 'email']);
       });
+    });
+  });
+
+  describe('issue paths', () => {
+    const firstPath = (schema: unknown, data: any, opts?: CompileOptions) => {
+      const v = compile(schema as Schema<unknown>, opts);
+      v(data);
+      return v.issues[0]?.path;
+    };
+
+    const allPaths = (schema: unknown, data: any) => {
+      const v = compile(schema as Schema<unknown>, { allErrors: true });
+      v(data);
+      return v.issues.map((i) => i.path);
+    };
+
+    describe('static paths', () => {
+      it('primitive at root: empty path', () => {
+        expect(firstPath(Number, 'x')).toEqual([]);
+      });
+
+      it('nested object property', () => {
+        expect(firstPath({ user: { name: String } }, { user: { name: 42 } })).toEqual(['user', 'name']);
+      });
+
+      it('deep 5-level nesting', () => {
+        expect(firstPath({ a: { b: { c: { d: { e: Number } } } } }, { a: { b: { c: { d: { e: 'x' } } } } })).toEqual(['a', 'b', 'c', 'd', 'e']);
+      });
+
+      it('tuple element index', () => {
+        expect(firstPath({ coords: tuple(Number, Number) }, { coords: [1, 'x'] })).toEqual(['coords', 1]);
+      });
+
+      it('tuple containing object', () => {
+        expect(firstPath({ entry: tuple({ name: String }) }, { entry: [{ name: 42 }] })).toEqual(['entry', 0, 'name']);
+      });
+
+      it('optional-wrapped error uses parent path', () => {
+        expect(firstPath({ age: optional(Number) }, { age: 'x' })).toEqual(['age']);
+      });
+
+      it('or() failing all branches', () => {
+        expect(firstPath({ value: or(Number, Boolean) }, { value: 'str' })).toEqual(['value']);
+      });
+
+      it('and() with one failing side', () => {
+        expect(firstPath({ value: and(String, format.email()) }, { value: 'not-email' })).toEqual(['value']);
+      });
+
+      it('literal mismatch', () => {
+        expect(firstPath({ kind: 'user' }, { kind: 'admin' })).toEqual(['kind']);
+      });
+
+      it('null schema with non-null value', () => {
+        expect(firstPath({ x: null }, { x: 1 })).toEqual(['x']);
+      });
+
+      it('symbol schema mismatch', () => {
+        const s = Symbol.for('x');
+        expect(firstPath({ tag: s }, { tag: Symbol.for('y') })).toEqual(['tag']);
+      });
+
+      it('RegExp schema mismatch', () => {
+        expect(firstPath({ code: /^[A-Z]+$/ }, { code: 'abc' })).toEqual(['code']);
+      });
+
+      it('parent wrong type is reported at parent path', () => {
+        expect(firstPath({ address: { street: String } }, { address: 'not-obj' })).toEqual(['address']);
+      });
+    });
+
+    describe('dynamic (array) paths', () => {
+      it('array element index', () => {
+        expect(firstPath({ items: [Number] }, { items: [1, 2, 'x', 4] })).toEqual(['items', 2]);
+      });
+
+      it('nested object inside array includes the array index', () => {
+        expect(firstPath({ users: [{ name: String }] }, { users: [{ name: 'ok' }, { name: 42 }] })).toEqual(['users', 1, 'name']);
+      });
+
+      it('array inside object inside array includes both indices', () => {
+        expect(firstPath({ users: [{ tags: [String] }] }, { users: [{ tags: ['a', 'b'] }, { tags: ['x', 42] }] })).toEqual(['users', 1, 'tags', 1]);
+      });
+
+      it('nested arrays [[Number]]', () => {
+        expect(firstPath([[Number]], [[1, 2], [3, 'x', 5]])).toEqual([1, 1]);
+      });
+
+      it('tuple inside array', () => {
+        expect(firstPath({ pairs: [tuple(Number, String)] }, { pairs: [[1, 'a'], [2, 42]] })).toEqual(['pairs', 1, 1]);
+      });
+
+      it('discriminated union inside array: variant prop error', () => {
+        const sch = {
+          events: [discriminated([{ type: 'click', x: Number }, { type: 'key', code: String }], 'type')],
+        };
+        expect(firstPath(sch, { events: [{ type: 'click', x: 1 }, { type: 'click', x: 'bad' }] })).toEqual(['events', 1, 'x']);
+      });
+
+      it('discriminated bad discriminant inside array uses element path', () => {
+        const sch = {
+          events: [discriminated([{ type: 'click', x: Number }, { type: 'key', code: String }], 'type')],
+        };
+        expect(firstPath(sch, { events: [{ type: 'unknown', x: 1 }] })).toEqual(['events', 0]);
+      });
+
+      it('$values dynamic key path', () => {
+        expect(firstPath({ map: { [$values]: Number } }, { map: { a: 1, b: 'x', c: 3 } })).toEqual(['map', 'b']);
+      });
+
+      it('$values with object value includes inner key', () => {
+        expect(firstPath({ map: { [$values]: { n: Number } } }, { map: { a: { n: 1 }, b: { n: 'x' } } })).toEqual(['map', 'b', 'n']);
+      });
+
+      it('deeply mixed static/dynamic path', () => {
+        const sch = { users: [{ profile: { tags: [String] } }] };
+        const data = {
+          users: [
+            { profile: { tags: ['a', 'b'] } },
+            { profile: { tags: ['ok', 42] } },
+          ],
+        };
+        expect(firstPath(sch, data)).toEqual(['users', 1, 'profile', 'tags', 1]);
+      });
+    });
+
+    describe('all-errors mode paths', () => {
+      it('collects correct path per error in flat object', () => {
+        const paths = allPaths({ a: Number, b: String, c: Boolean }, { a: 'x', b: 1, c: 'y' });
+        expect(paths).toEqual([['a'], ['b'], ['c']]);
+      });
+
+      it('collects correct path per error in nested object', () => {
+        const paths = allPaths({ a: { x: Number }, b: { y: String } }, { a: { x: 'bad' }, b: { y: 0 } });
+        expect(paths).toEqual([['a', 'x'], ['b', 'y']]);
+      });
+
+      it('collects correct paths for each array element error', () => {
+        const paths = allPaths({ items: [Number] }, { items: ['a', 2, 'c'] });
+        expect(paths).toEqual([['items', 0], ['items', 2]]);
+      });
+
+      it('collects correct paths for errors inside nested array-of-objects', () => {
+        const paths = allPaths({ users: [{ name: String, age: Number }] }, {
+          users: [
+            { name: 'ok', age: 'bad' },
+            { name: 42, age: 10 },
+          ],
+        });
+        expect(paths).toContainEqual(['users', 0, 'age']);
+        expect(paths).toContainEqual(['users', 1, 'name']);
+      });
+
+      it('collects paths across mixed static/dynamic structure', () => {
+        const sch = { items: [{ tags: [String] }] };
+        const data = {
+          items: [
+            { tags: ['ok', 42] },
+            { tags: [1, 'ok', 3] },
+          ],
+        };
+        const paths = allPaths(sch, data);
+        expect(paths).toContainEqual(['items', 0, 'tags', 1]);
+        expect(paths).toContainEqual(['items', 1, 'tags', 0]);
+        expect(paths).toContainEqual(['items', 1, 'tags', 2]);
+      });
+
+      it('root null/undefined produces root-path error', () => {
+        const paths = allPaths({ a: Number }, null);
+        expect(paths[0]).toEqual([]);
+      });
+
+      it('$strict extras report at parent object path', () => {
+        const paths = allPaths({ obj: { a: Number, [$strict]: true } }, { obj: { a: 1, b: 2 } });
+        expect(paths[0]).toEqual(['obj']);
+      });
+    });
+
+    describe('path integrity across modes', () => {
+      it('first-error and all-errors produce same path for same error', () => {
+        const schema = { users: [{ name: String }] };
+        const data = { users: [{ name: 'ok' }, { name: 42 }] };
+        const p1 = firstPath(schema, data);
+        const p2 = firstPath(schema, data, { allErrors: true });
+        expect(p1).toEqual(p2);
+      });
+
+      it('pure mode produces same paths as default', () => {
+        const schema = { users: [{ name: String }] };
+        const data = { users: [{ name: 42 }] };
+        expect(firstPath(schema, data, { pure: true })).toEqual(['users', 0, 'name']);
+      });
+
+      it('pure + allErrors produces same paths as default', () => {
+        const schema = { items: [Number] };
+        const data = { items: ['a', 'b'] };
+        const v = compile(schema as Schema<unknown>, { allErrors: true, pure: true });
+        v(data);
+        expect(v.issues.map((i) => i.path)).toEqual([['items', 0], ['items', 1]]);
+      });
+
+      it('as.* error reports path of its property', () => {
+        expect(firstPath({ port: Number }, { port: as.number('not-a-number') })).toEqual(['port']);
+      });
+
+      it('as.* error nested in array-of-object', () => {
+        const schema = { servers: [{ port: Number }] };
+        const data = { servers: [{ port: as.number('1') }, { port: as.number('bad') }] };
+        expect(firstPath(schema, data)).toEqual(['servers', 1, 'port']);
+      });
+    });
+
+    describe('path is a PropertyKey array (not object or string)', () => {
+      it('path entries are strings or numbers, not objects', () => {
+        const v = compile({ items: [{ name: String }] }, { allErrors: true });
+        v({ items: [{ name: 1 }, { name: 2 }] });
+        for (const issue of v.issues) {
+          for (const seg of issue.path!) {
+            expect(typeof seg === 'string' || typeof seg === 'number').toBe(true);
+          }
+        }
+      });
+    });
+  });
+
+  describe('collapsed OR edge cases', () => {
+    it('or(null, String) accepts null', () => {
+      const v = compile({ x: or(null, String) });
+      expect(v({ x: null })).toBe(true);
+      expect(v({ x: 'str' })).toBe(true);
+      expect(v({ x: 1 })).toBe(false);
+    });
+
+    it('or(undefined, Number) accepts undefined', () => {
+      const v = compile({ x: or(undefined, Number) });
+      expect(v({ x: undefined })).toBe(true);
+      expect(v({ x: 1 })).toBe(true);
+      expect(v({ x: 'nope' })).toBe(false);
+    });
+
+    it('or(null, undefined, String) accepts both nullish', () => {
+      const v = compile({ x: or(null, undefined, String) });
+      expect(v({ x: null })).toBe(true);
+      expect(v({ x: undefined })).toBe(true);
+      expect(v({ x: 's' })).toBe(true);
+      expect(v({ x: 1 })).toBe(false);
+    });
+
+    it('or with single literal of a type (not mixed into type group)', () => {
+      const v = compile({ x: or(Number, 'admin') });
+      expect(v({ x: 1 })).toBe(true);
+      expect(v({ x: 'admin' })).toBe(true);
+      expect(v({ x: 'user' })).toBe(false);
+      expect(v({ x: true })).toBe(false);
+    });
+
+    it('or error message includes null/undefined expected values', () => {
+      const v = compile({ x: or(null, String) });
+      v({ x: 1 });
+      expect(v.issues[0].message).toContain('null');
+    });
+
+    it('or error message includes undefined expected value', () => {
+      const v = compile({ x: or(undefined, Number) });
+      v({ x: 'bad' });
+      expect(v.issues[0].message).toContain('undefined');
+    });
+
+    it('allErrors: or(null, String) wrong type reports one issue', () => {
+      const v = compile({ x: or(null, String) }, { allErrors: true });
+      v({ x: 42 });
+      expect(v.issues.length).toBe(1);
+    });
+  });
+
+  describe('allErrors + $keys/$values/$strict at indexed root', () => {
+    it('$keys validation in allErrors mode', () => {
+      const v = compile({ [$keys]: /^[a-z]+$/, a: Number }, { allErrors: true });
+      expect(v({ a: 1 })).toBe(true);
+      expect(v({ a: 1, BAD: 2 } as any)).toBe(false);
+      expect(v.issues.length).toBeGreaterThan(0);
+    });
+
+    it('$values validation in allErrors mode', () => {
+      const v = compile({ [$values]: Number } as any, { allErrors: true });
+      expect(v({ a: 1, b: 2 })).toBe(true);
+      const result = v({ a: 1, b: 'bad', c: 'worse' } as any);
+      expect(result).toBe(false);
+      expect(v.issues.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('$strict in allErrors mode reports extra keys', () => {
+      const v = compile({ a: Number, [$strict]: true }, { allErrors: true });
+      expect(v({ a: 1 })).toBe(true);
+      expect(v({ a: 1, extra: 2 } as any)).toBe(false);
+      expect(v.issues[0].message).toContain('Extra');
+    });
+
+    it('$keys + $values together in allErrors', () => {
+      const v = compile({ [$keys]: /^[a-z]+$/, [$values]: Number }, { allErrors: true });
+      expect(v({ a: 1, b: 2 })).toBe(true);
+      const result = v({ a: 1, BAD: 2, c: 'x' } as any);
+      expect(result).toBe(false);
+      expect(v.issues.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('collapsible OR extended types', () => {
+    it('or(BigInt, String) accepts bigint and string', () => {
+      const v = compile({ x: or(BigInt, String) });
+      expect(v({ x: 1n })).toBe(true);
+      expect(v({ x: 'a' })).toBe(true);
+      expect(v({ x: 1 })).toBe(false);
+    });
+
+    it('or(Symbol, Number) accepts symbol and number', () => {
+      const v = compile({ x: or(Symbol, Number) });
+      expect(v({ x: Symbol('a') })).toBe(true);
+      expect(v({ x: 1 })).toBe(true);
+      expect(v({ x: 'str' })).toBe(false);
+    });
+
+    it('or(Function, String) accepts function and string', () => {
+      const v = compile({ x: or(Function, String) });
+      expect(v({ x: () => {} })).toBe(true);
+      expect(v({ x: 'str' })).toBe(true);
+      expect(v({ x: 1 })).toBe(false);
+    });
+
+    it('or with duplicate constructors of same type still validates', () => {
+      const v = compile({ x: or(Number, Number, String) });
+      expect(v({ x: 1 })).toBe(true);
+      expect(v({ x: 'a' })).toBe(true);
+      expect(v({ x: true })).toBe(false);
+    });
+  });
+
+  describe('non-collapsed / non-issuesReady OR paths', () => {
+    it('collapsed OR inside array (non-issuesReady context) pushes error', () => {
+      const v = compile({ xs: [or('a', 'b')] }, { allErrors: true });
+      expect(v({ xs: ['a', 'c', 'b', 'd'] })).toBe(false);
+      expect(v.issues.length).toBe(2);
+    });
+
+    it('non-collapsible OR in allErrors surfaces all branch issues', () => {
+      const v = compile({ x: or({ a: Number }, { b: String }) }, { allErrors: true });
+      expect(v({ x: { a: 'bad' } })).toBe(false);
+      expect(v.issues.length).toBeGreaterThan(0);
+    });
+
+    it('non-collapsible OR inside array merges branch issues via fallback push', () => {
+      const v = compile({ xs: [or({ a: Number }, { b: String })] }, { allErrors: true });
+      expect(v({ xs: [{ a: 1 }, { a: 'x' }] })).toBe(false);
+      expect(v.issues.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('optional with non-primitive inner schema', () => {
+    it('optional(Date) allows null/undefined and Date', () => {
+      const v = compile({ when: optional(Date) });
+      expect(v({ when: null })).toBe(true);
+      expect(v({ when: undefined })).toBe(true);
+      expect(v({ when: new Date() })).toBe(true);
+      expect(v({ when: 'not-a-date' })).toBe(false);
+    });
+
+    it('optional(Array) with inner non-primitive', () => {
+      const v = compile({ list: optional(Array) });
+      expect(v({ list: null })).toBe(true);
+      expect(v({ list: [] })).toBe(true);
+      expect(v({ list: 'str' })).toBe(false);
+    });
+  });
+
+  describe('RegExp schema in non-pure mode', () => {
+    it('RegExp schema reports mismatch message in default mode', () => {
+      const v = compile({ code: /^\d+$/ });
+      expect(v({ code: '123' })).toBe(true);
+      expect(v({ code: 'abc' })).toBe(false);
+      expect(v.issues[0].message).toContain('expected to match');
+    });
+
+    it('RegExp schema accepts deferred asError', () => {
+      const v = compile({ code: /^\d+$/ });
+      expect(v({ code: asError('bad code') as any })).toBe(false);
+      expect(v.issues[0].message).toBe('bad code');
+    });
+  });
+
+  describe('literal value with pure compile option', () => {
+    it('literal string mismatch in pure mode produces value-error message', () => {
+      const v = compile({ kind: 'user' }, { pure: true });
+      expect(v({ kind: 'admin' })).toBe(false);
+      expect(v.issues[0].message).toContain('expected');
+    });
+
+    it('literal number type mismatch in pure mode produces type-error message', () => {
+      const v = compile({ code: 1 }, { pure: true });
+      expect(v({ code: 'str' })).toBe(false);
+      expect(v.issues[0].message).toContain('Invalid type');
+    });
+  });
+
+  describe('literal value deferred asError in non-pure mode', () => {
+    it('asError passed as literal property is surfaced', () => {
+      const v = compile({ kind: 'user' });
+      expect(v({ kind: asError('parse failed') as any })).toBe(false);
+      expect(v.issues[0].message).toBe('parse failed');
+    });
+  });
+
+  describe('non-primitive class with asError passed as value', () => {
+    it('class schema surfaces asError message', () => {
+      const v = compile({ when: Date });
+      expect(v({ when: asError('bad date') as any })).toBe(false);
+      expect(v.issues[0].message).toBe('bad date');
+    });
+  });
+
+  describe('non-indexed allErrors paths', () => {
+    it('allErrors with tagged root schema (or) valid data returns true', () => {
+      const v = compile(or(String, Number), { allErrors: true });
+      expect(v('hi')).toBe(true);
+      expect(v(42)).toBe(true);
+    });
+
+    it('allErrors with tagged root schema (or) invalid data reports issues', () => {
+      const v = compile(or(String, Number), { allErrors: true });
+      expect(v(true)).toBe(false);
+      expect(v.issues.length).toBeGreaterThan(0);
+    });
+
+    it('allErrors with array root schema and valid data', () => {
+      const v = compile([Number], { allErrors: true });
+      expect(v([1, 2, 3])).toBe(true);
+    });
+
+    it('allErrors with array root schema and invalid elements', () => {
+      const v = compile([Number], { allErrors: true });
+      expect(v([1, 'bad', 3, 'also-bad'])).toBe(false);
+      expect(v.issues.length).toBe(2);
+    });
+
+    it('allErrors with tuple root schema', () => {
+      const v = compile(tuple(Number, String), { allErrors: true });
+      expect(v([1, 'a'])).toBe(true);
+      expect(v([1, 2] as any)).toBe(false);
+    });
+
+    it('allErrors with RegExp root schema', () => {
+      const v = compile(/^\d+$/, { allErrors: true });
+      expect(v('123')).toBe(true);
+      expect(v('abc')).toBe(false);
+    });
+  });
+
+  describe('collapsed OR nested inside non-collapsed OR branch', () => {
+    it('nested collapsed OR inside outer non-collapsible OR triggers non-ready push', () => {
+      const v = compile({ x: or({ kind: or('a', 'b') }, String) }, { allErrors: true });
+      expect(v({ x: { kind: 'a' } })).toBe(true);
+      expect(v({ x: 'str' })).toBe(true);
+      expect(v({ x: { kind: 'c' } })).toBe(false);
+      expect(v.issues.length).toBeGreaterThan(0);
+    });
+
+    it('non-collapsible OR in allErrors mode inside nested OR branch', () => {
+      const v = compile({ x: or({ a: or({ n: Number }, Boolean) }, String) }, { allErrors: true });
+      expect(v({ x: { a: true } })).toBe(true);
+      expect(v({ x: { a: { n: 1 } } })).toBe(true);
+      expect(v({ x: { a: 'nope' } })).toBe(false);
+    });
+  });
+
+  describe('optional flattened primitives', () => {
+    it('optional(String) reports type error for non-string', () => {
+      const v = compile({ name: optional(String) });
+      expect(v({ name: null })).toBe(true);
+      expect(v({ name: 'ok' })).toBe(true);
+      expect(v({ name: 42 })).toBe(false);
+    });
+
+    it('optional(Boolean) reports type error for non-boolean', () => {
+      const v = compile({ flag: optional(Boolean) });
+      expect(v({ flag: undefined })).toBe(true);
+      expect(v({ flag: true })).toBe(true);
+      expect(v({ flag: 'yes' })).toBe(false);
+    });
+
+    it('optional(BigInt) reports type error for non-bigint', () => {
+      const v = compile({ big: optional(BigInt) });
+      expect(v({ big: null })).toBe(true);
+      expect(v({ big: 1n })).toBe(true);
+      expect(v({ big: 1 })).toBe(false);
+    });
+
+    it('optional(Symbol) accepts null/undefined and symbol, rejects others', () => {
+      const v = compile({ tag: optional(Symbol) });
+      expect(v({ tag: null })).toBe(true);
+      expect(v({ tag: undefined })).toBe(true);
+      expect(v({ tag: Symbol('x') })).toBe(true);
+      expect(v({ tag: 'string' })).toBe(false);
+    });
+  });
+
+  describe('RegExp schema in pure mode', () => {
+    it('RegExp schema validates in pure mode', () => {
+      const v = compile({ code: /^\d+$/ }, { pure: true });
+      expect(v({ code: '123' })).toBe(true);
+      expect(v({ code: 'abc' })).toBe(false);
+      expect(v.issues[0].message).toContain('expected to match');
     });
   });
 });
