@@ -51,8 +51,8 @@ const suite = benchmark('simple valid', simpleValid)
   .feed('complex valid', complexValid)
   .feed('complex invalid', complexInvalid);
 
-const target = suite.target('release ascertain', async () => {
-  const { compile, or, optional, discriminated } = await import('ascertain-release');
+const target = suite.target('ascertain', async () => {
+  const { compile, or, optional, discriminated } = await import('../../build/index.js');
 
   const simpleSchema = {
     string: String,

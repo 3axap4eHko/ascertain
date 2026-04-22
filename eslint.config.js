@@ -2,7 +2,7 @@ import prettier from 'eslint-plugin-prettier';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 
-const ignores = ['docs', 'build', 'coverage', 'node_modules', '*.tmp.*', 'src/__tests__/*'];
+const ignores = ['docs', 'build', 'coverage', 'node_modules', '*.tmp.*', 'src/__tests__/*', 'src/__bench__/*'];
 
 export default [
   {

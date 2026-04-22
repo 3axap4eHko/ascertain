@@ -1,12 +1,13 @@
 # Ascertain
 
-Zero-dependency, high-performance schema validator for Node.js and browsers.
+Compiled schema-and-constraint validation for JavaScript-native runtime values.
+
+Write schemas as native JavaScript values, compile them once, and validate at AJV-class or better speed with zero dependencies and detailed pathful errors.
 
 [![Coverage Status][codecov-image]][codecov-url]
 [![Build Status][github-image]][github-url]
 [![NPM version][npm-image]][npm-url]
 [![Downloads][downloads-image]][npm-url]
-[![Snyk][snyk-image]][snyk-url]
 
 ## Table of Contents
 
@@ -40,7 +41,7 @@ Zero-dependency, high-performance schema validator for Node.js and browsers.
   - [`multipleOf(n: number, message?: string): CheckShape`](#multipleofn-number-message-string-checkshape)
   - [`uniqueItems(message?: string): CheckShape`](#uniqueitemsmessage-string-checkshape)
   - [`oneOf(values: string | number[] | T, message?: string): CheckShape`](#oneofvalues-string--number--t-message-string-checkshape)
-  - [`fromBase64`](#frombase64)
+  - [`fromBase64(value: string): string`](#frombase64value-string-string)
   - [`asError(message: string)`](#aserrormessage-string)
   - [`as`](#as)
   - [`format`](#format)
@@ -52,14 +53,15 @@ Zero-dependency, high-performance schema validator for Node.js and browsers.
 
 ## Features
 
-- **Zero dependencies** - Minimal footprint, no external dependencies
-- **High performance** - Compiles schemas to optimized JS functions (~6x faster than dynamic validation)
+- **JavaScript-native schemas** - Use constructors, literals, regexes, arrays, and object shapes directly
+- **Compiled validators** - `compile()` emits specialized JS validators instead of interpreting the schema on every call
+- **Fast first-error and all-errors modes** - Stay fast on valid data and on bad input
+- **Zero dependencies** - Small footprint for Node.js and browsers
 - **Type-safe** - Full TypeScript support with type inference
-- **Flexible schemas** - AND, OR, optional, tuple, discriminated operators
-- **Type casting** - Built-in parsers for numbers (hex, octal, binary), dates, JSON, base64
+- **Flexible schemas** - AND, OR, optional, tuple, discriminated, and custom check operators
 - **Object validation** - Validate keys/values with `$keys`, `$values`, `$strict`
+- **Type casting** - Built-in parsers for numbers, dates, JSON, base64, bytes, and durations
 - **Partial validation** - `createValidator` validates subsets with type narrowing
-- **Detailed errors** - Clear error messages with paths for debugging
 - **Standard Schema v1** - Interoperable with tRPC, TanStack Form, and other ecosystem tools
 
 ## Install
@@ -71,19 +73,34 @@ npm install ascertain
 ## Quick Start
 
 ```typescript
-import { ascertain, or, optional } from 'ascertain';
+import { compile, discriminated, optional, or } from 'ascertain';
 
-ascertain({
-  name: String,
-  age: Number,
-  role: or('admin', 'user'),
-  email: optional(String),
-}, userData);
+const validateUser = compile({
+  id: Number,
+  role: or('admin', 'user', 'guest'),
+  score: optional(Number),
+  notifications: [
+    discriminated(
+      [
+        { type: 'email', address: String },
+        { type: 'sms', phone: String },
+        { type: 'push', token: String },
+      ],
+      'type',
+    ),
+  ],
+});
+
+if (!validateUser(userData)) {
+  console.error(validateUser.issues);
+}
 ```
+
+Use `ascertain(schema, data)` when you want the convenience wrapper that compiles and throws immediately on failure.
 
 ## Performance
 
-Ascertain compiles schemas into optimized JavaScript functions. Compiled validators run **~6x faster** than dynamic validation.
+`compile()` is the center of the library. It turns a schema written as native JS values into a specialized validator function that you can reuse in hot paths.
 
 ```typescript
 import { compile } from 'ascertain';
@@ -96,22 +113,27 @@ validateUser(user1);
 validateUser(user2);
 ```
 
-| When to use | Function | Speed |
-|-------------|----------|-------|
-| Repeated validation (API handlers, loops) | `compile()` | Fastest |
-| One-off validation | `ascertain()` | Convenient |
+| When to use | Function | Why |
+|-------------|----------|-----|
+| Repeated validation (API handlers, loops, message boundaries) | `compile()` | Compile once, reuse the generated validator |
+| One-off validation | `ascertain()` | Convenience wrapper around `compile()` that throws on failure |
 
 ### Benchmark
 
-| Library | Mode | Valid (ops/s) | Invalid (ops/s) |
-|---------|------|---------------|-----------------|
-| **Ascertain** | first-error | 322M | 84M |
-| **Ascertain** | all-errors | 325M | 36M |
-| AJV | first-error | 92M | 65M |
-| AJV | all-errors | 92M | 30M |
-| Zod | all-errors | 62M | 72K |
+Maintainer-run benchmark suites live in `src/__bench__/benchmark.ts` and `src/__bench__/benchmark-complex.ts`. On the current checkout, Ascertain is consistently faster than AJV in this suite and dramatically faster than Zod on invalid all-errors workloads.
 
-Benchmark source: [`src/__bench__/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/src/__bench__/benchmark.ts)
+Comparable all-errors results from the current run:
+
+| Workload | Ascertain | AJV | Zod |
+|----------|-----------|-----|-----|
+| Simple valid | **350.9M** ops/s | 88.7M ops/s | 57.9M ops/s |
+| Simple invalid | **38.2M** ops/s | 28.2M ops/s | 75.7K ops/s |
+| Complex valid | **47.8M** ops/s | 38.1M ops/s | 6.1M ops/s |
+| Complex invalid | **16.9M** ops/s | 11.7M ops/s | 44.0K ops/s |
+
+First-error mode is the default and pushes invalid-path throughput higher still. In the same run, Ascertain reached 91.1M ops/s on simple invalid data and 83.6M ops/s on complex invalid data.
+
+Benchmark sources: [`src/__bench__/benchmark.ts`](https://github.com/3axap4eHko/ascertain/blob/master/src/__bench__/benchmark.ts), [`src/__bench__/benchmark-complex.ts`](https://github.com/3axap4eHko/ascertain/blob/master/src/__bench__/benchmark-complex.ts), [`src/__bench__/self.ts`](https://github.com/3axap4eHko/ascertain/blob/master/src/__bench__/self.ts)
 
 Run it locally:
 
@@ -535,15 +557,7 @@ if (!validate(data)) {
 - @param values - Array of allowed values or an enum-like object.
 - @param message - Optional custom error message.
  
-### `fromBase64`
-
- Decodes a base64-encoded string to UTF-8.
-
- Uses `Buffer` in Node.js environments and `atob` in browsers.
-
-- @param value - The base64-encoded string to decode.
-- @returns The decoded UTF-8 string.
- 
+### `fromBase64(value: string): string`
 ### `asError(message: string)`
 
  Creates a TypeError with the given message, typed as T for deferred error handling.
@@ -724,5 +738,3 @@ if (!validate(data)) {
 [github-image]: https://github.com/3axap4eHko/ascertain/actions/workflows/cicd.yml/badge.svg
 [codecov-url]: https://codecov.io/gh/3axap4eHko/ascertain
 [codecov-image]: https://img.shields.io/codecov/c/github/3axap4eHko/ascertain/master.svg?maxAge=43200
-[snyk-url]: https://snyk.io/test/npm/ascertain/latest
-[snyk-image]: https://img.shields.io/snyk/vulnerabilities/github/3axap4eHko/ascertain.svg?maxAge=43200

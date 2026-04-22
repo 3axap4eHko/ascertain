@@ -1,45 +1,45 @@
 {
   "version": 1,
-  "timestamp": "2026-04-18T20:15:40.379Z",
+  "timestamp": "2026-04-21T17:27:14.760Z",
   "results": {
-    "release ascertain/validate first error/simple valid": {
-      "ops": 355366027,
+    "ascertain/validate first error/simple valid": {
+      "ops": 332336324,
       "heapUsedKB": 0,
       "dceWarning": false
     },
-    "release ascertain/validate first error/simple invalid": {
-      "ops": 67503712,
-      "heapUsedKB": 1871,
+    "ascertain/validate first error/simple invalid": {
+      "ops": 95301629,
+      "heapUsedKB": 2195,
       "dceWarning": false
     },
-    "release ascertain/validate first error/complex valid": {
-      "ops": 24308425,
+    "ascertain/validate first error/complex valid": {
+      "ops": 28044197,
       "heapUsedKB": 0,
       "dceWarning": false
     },
-    "release ascertain/validate first error/complex invalid": {
-      "ops": 66858327,
-      "heapUsedKB": 4587,
+    "ascertain/validate first error/complex invalid": {
+      "ops": 76552093,
+      "heapUsedKB": 1095,
       "dceWarning": false
     },
-    "release ascertain/validate all errors/simple valid": {
-      "ops": 360230547,
+    "ascertain/validate all errors/simple valid": {
+      "ops": 322268772,
       "heapUsedKB": 0,
       "dceWarning": false
     },
-    "release ascertain/validate all errors/simple invalid": {
-      "ops": 33794059,
+    "ascertain/validate all errors/simple invalid": {
+      "ops": 38986354,
+      "heapUsedKB": 283,
+      "dceWarning": false
+    },
+    "ascertain/validate all errors/complex valid": {
+      "ops": 29682398,
       "heapUsedKB": 0,
       "dceWarning": false
     },
-    "release ascertain/validate all errors/complex valid": {
-      "ops": 23819164,
+    "ascertain/validate all errors/complex invalid": {
+      "ops": 16322266,
       "heapUsedKB": 0,
-      "dceWarning": false
-    },
-    "release ascertain/validate all errors/complex invalid": {
-      "ops": 3332966,
-      "heapUsedKB": 5760,
       "dceWarning": false
     }
   }
