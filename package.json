@@ -59,7 +59,7 @@
     "@typescript-eslint/typescript-estree": "^8.62.1",
     "@vitest/coverage-v8": "^4.1.9",
     "@vuepress/bundler-vite": "2.0.0-rc.30",
-    "@vuepress/theme-default": "2.0.0-rc.130",
+    "@vuepress/theme-default": "2.0.0-rc.131",
     "ajv": "^8.20.0",
     "ascertain": "latest",
     "eslint": "^10.6.0",
