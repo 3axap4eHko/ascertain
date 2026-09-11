@@ -78,7 +78,7 @@
     "vitest": "^4.1.11",
     "vue": "^3.5.42",
     "vuepress": "2.0.0-rc.31",
-    "zod": "^4.6.1"
+    "zod": "^4.6.2"
   },
   "packageManager": "pnpm@10.34.5"
 }
