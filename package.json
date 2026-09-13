@@ -71,14 +71,14 @@
     "overtake": "^2.1.1",
     "prettier": "^3.9.6",
     "recast": "^0.24.0",
-    "sass-embedded": "^1.104.0",
+    "sass-embedded": "^1.104.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.11",
     "vue": "^3.5.42",
     "vuepress": "2.0.0-rc.31",
-    "zod": "^4.6.2"
+    "zod": "^4.6.4"
   },
   "packageManager": "pnpm@10.34.5"
 }
