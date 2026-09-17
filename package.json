@@ -69,7 +69,7 @@
     "husky": "^9.1.7",
     "inop": "^0.9.4",
     "overtake": "^2.1.1",
-    "prettier": "^3.9.6",
+    "prettier": "^3.9.7",
     "recast": "^0.24.0",
     "sass-embedded": "^1.104.1",
     "ts-node": "^10.9.2",
